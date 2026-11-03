@@ -1,0 +1,675 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>eigen — test</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300;9..144,400;9..144,600&family=JetBrains+Mono:wght@300;400;500&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+  :root {
+    --bg: #1a1a1c;
+    --bg-soft: #232328;
+    --cell: #6a6a72;
+    --cell-edge: #45454d;
+    --ink: #e8e6e0;
+    --ink-dim: #8a8780;
+    --ink-faint: #4a4a50;
+    --win: #82e0aa;
+  }
+
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: 'Fraunces', Georgia, serif;
+    overflow-y: auto;
+    overflow-x: hidden;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+
+  body {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 16px;
+    padding-top: max(16px, env(safe-area-inset-top));
+    padding-bottom: max(24px, env(safe-area-inset-bottom));
+    min-height: 100vh;
+    background:
+      radial-gradient(ellipse at top, #25252a 0%, var(--bg) 60%),
+      var(--bg);
+  }
+
+  .header {
+    text-align: center;
+    margin-bottom: 24px;
+    width: 100%;
+    max-width: 420px;
+  }
+
+  .title {
+    font-family: 'Fraunces', serif;
+    font-weight: 300;
+    font-size: 32px;
+    letter-spacing: 0.02em;
+    color: var(--ink);
+    font-style: italic;
+  }
+
+  .subtitle {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: var(--ink-faint);
+    letter-spacing: 0.3em;
+    text-transform: uppercase;
+    margin-top: 6px;
+  }
+
+  .level-info {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--ink-dim);
+    letter-spacing: 0.15em;
+    margin-top: 14px;
+    text-align: center;
+  }
+
+  .level-info .moves {
+    color: var(--ink-faint);
+    margin-left: 12px;
+  }
+
+  .target-section {
+    width: 100%;
+    max-width: 420px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    margin-bottom: 28px;
+  }
+
+  .target-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: var(--ink-faint);
+    letter-spacing: 0.3em;
+    text-transform: uppercase;
+  }
+
+  .target-total {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: var(--ink-faint);
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+  }
+
+  .target-board {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 3px;
+    background: var(--bg-soft);
+    padding: 4px;
+    border-radius: 4px;
+    border: 1px solid var(--ink-faint);
+  }
+
+  .target-cell {
+    width: 32px;
+    height: 32px;
+    background: var(--cell);
+    border-radius: 3px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+  }
+
+  .target-circle {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: #ffffff;
+    transition: background 0.3s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1;
+  }
+
+  .play-area {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 20px;
+    margin-bottom: 16px;
+  }
+
+  .board {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+    background: var(--bg-soft);
+    padding: 12px;
+    border-radius: 8px;
+    border: 1px solid var(--cell-edge);
+    box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+  }
+
+  .cell {
+    width: 110px;
+    height: 110px;
+    background: var(--cell);
+    border-radius: 6px;
+    display: flex;
+    align-items: flex-end;
+    justify-content: flex-start;
+    padding: 12px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    position: relative;
+    border: 2px solid transparent;
+  }
+
+  .board.size-3 .cell {
+    width: 90px;
+    height: 90px;
+    padding: 8px;
+  }
+
+  .board.size-4 .cell {
+    width: 68px;
+    height: 68px;
+    padding: 6px;
+  }
+
+  .cell:active {
+    transform: scale(0.97);
+  }
+
+  .cell.match-pulse {
+    animation: matchPulse 0.5s ease;
+  }
+
+  @keyframes matchPulse {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.05); box-shadow: 0 0 20px rgba(130, 224, 170, 0.4); }
+    100% { transform: scale(1); }
+  }
+
+  .circle {
+    width: 64px;
+    height: 64px;
+    border-radius: 50%;
+    background: #ffffff;
+    transition: background 0.4s ease, transform 0.3s ease;
+    box-shadow: inset 0 -2px 8px rgba(0,0,0,0.15);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 22px;
+    font-weight: 400;
+    line-height: 1;
+  }
+
+  .board.size-3 .circle {
+    width: 52px;
+    height: 52px;
+    font-size: 18px;
+  }
+
+  .board.size-4 .circle {
+    width: 40px;
+    height: 40px;
+    font-size: 14px;
+  }
+
+  .hand-section {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .hand-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: var(--ink-faint);
+    letter-spacing: 0.3em;
+    text-transform: uppercase;
+  }
+
+  .hand {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    padding: 12px 16px;
+    background: var(--bg-soft);
+    border-radius: 8px;
+    border: 1px solid var(--cell-edge);
+    min-height: 60px;
+    max-width: 340px;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .hand-piece {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    cursor: pointer;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+    border: 2px solid transparent;
+    background: #ffffff;
+    box-shadow: inset 0 -2px 6px rgba(0,0,0,0.15);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 14px;
+    font-weight: 500;
+    color: rgba(0,0,0,0.55);
+    line-height: 1;
+    flex-shrink: 0;
+  }
+
+  .hand-piece:active {
+    transform: scale(0.92);
+  }
+
+  .hand-piece.selected {
+    border-color: var(--ink);
+    transform: scale(1.08);
+    box-shadow: inset 0 -2px 6px rgba(0,0,0,0.15), 0 0 12px rgba(232,230,224,0.3);
+  }
+
+  .hand-piece.used {
+    opacity: 0.15;
+    pointer-events: none;
+  }
+
+  .hand-empty {
+    color: var(--ink-faint);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+  }
+
+  .controls {
+    display: flex;
+    gap: 12px;
+    margin-top: 8px;
+  }
+
+  .btn {
+    background: transparent;
+    color: var(--ink-dim);
+    border: 1px solid var(--cell-edge);
+    padding: 10px 22px;
+    border-radius: 4px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  .btn:hover, .btn:active {
+    color: var(--ink);
+    border-color: var(--ink-dim);
+  }
+
+  .hint {
+    margin-top: 18px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: var(--ink-faint);
+    letter-spacing: 0.15em;
+    text-align: center;
+    max-width: 320px;
+    line-height: 1.6;
+  }
+
+  .win-banner {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%) scale(0.9);
+    background: var(--bg-soft);
+    border: 1px solid var(--win);
+    color: var(--win);
+    padding: 24px 40px;
+    border-radius: 8px;
+    font-family: 'Fraunces', serif;
+    font-style: italic;
+    font-size: 24px;
+    font-weight: 300;
+    opacity: 0;
+    pointer-events: none;
+    transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+    z-index: 100;
+    box-shadow: 0 8px 40px rgba(130, 224, 170, 0.2);
+  }
+
+  .win-banner.visible {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+    pointer-events: auto;
+    cursor: pointer;
+  }
+
+  .win-banner .small {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.3em;
+    text-transform: uppercase;
+    color: var(--ink-dim);
+    display: block;
+    margin-top: 8px;
+    text-align: center;
+  }
+</style>
+</head>
+<body>
+
+  <div class="header">
+    <div class="title">eigen</div>
+    <div class="subtitle">test build · darkness</div>
+  </div>
+
+  <div class="target-section">
+    <div class="target-label">target</div>
+    <div class="target-board" id="targetBoard"></div>
+    <div class="target-total" id="targetTotal">total: 12</div>
+  </div>
+
+  <div class="level-info">
+    <span id="levelText">level 1 · 2×2</span>
+    <span class="moves" id="moveCounter">moves: 0</span>
+  </div>
+
+  <div class="play-area">
+    <div class="board" id="board"></div>
+    <div class="hand-section">
+      <div class="hand-label">hand · 4 pieces</div>
+      <div class="hand" id="hand"></div>
+    </div>
+  </div>
+
+  <div class="controls">
+    <button class="btn" id="resetBtn">reset</button>
+  </div>
+
+  <div class="hint" id="hint">each placement darkens the cell and its orthogonal neighbors. stack to go deeper.</div>
+
+  <div class="win-banner" id="winBanner">
+    matched.
+    <span class="small">tap to continue</span>
+  </div>
+
+<script>
+// darkness ranges 0 (white) to 6 (black). values can stack.
+function darknessToColor(d) {
+  const t = Math.max(0, Math.min(1, d / 6));  // clamp 0-1
+  const v = Math.round(255 * (1 - t));
+  return 'rgb(' + v + ',' + v + ',' + v + ')';
+}
+
+// pick readable text color based on background darkness
+function darknessToTextColor(d) {
+  // light backgrounds (low d) → dark text; dark backgrounds (high d) → light text
+  return d >= 3.5 ? 'rgba(255,255,255,0.85)' : 'rgba(0,0,0,0.55)';
+}
+
+// each level: target darkness pattern. pieces always = cells (size*size).
+// each piece adds 1 to placed cell + orthogonal neighbors.
+//
+// solvability for 2x2: a cell's darkness equals (sum of 3 placements on the other cells).
+// since each cell has 2 neighbors + itself = 3 contributing positions, and total placements = 4,
+// a cell's darkness = 4 - (placements on the diagonally opposite cell).
+// so each cell's darkness must be in [0..4], and the four (4-target) values must sum to 4.
+//
+// for 3x3 with 9 placements: each cell affected by placements on itself + orthogonal neighbors.
+// corners have 2 neighbors, edges have 3, center has 4.
+// "place once on each cell" produces: corners=3, edges=4, center=5. Total = 33.
+const LEVELS = [
+  {
+    name: 'level 1',
+    size: 2,
+    // uniform: place once on each cell. easiest.
+    target: [3, 3, 3, 3],
+  },
+  {
+    name: 'level 2',
+    size: 2,
+    // mild diagonal gradient: bottom-right is darker
+    // solution: a=0, b=1, c=1, d=2
+    target: [2, 3, 3, 4],
+  },
+  {
+    name: 'level 3',
+    size: 2,
+    // vertical stripes: left column lighter, right column darker
+    // solution: a=0, b=2, c=0, d=2
+    target: [2, 4, 2, 4],
+  },
+  {
+    name: 'level 4',
+    size: 2,
+    // anti-diagonal: top-right and bottom-left darkest
+    // solution: a=1, b=0, c=0, d=3
+    target: [1, 4, 4, 3],
+  },
+  {
+    name: 'level 5',
+    size: 3,
+    // 3x3 uniform: place once on each cell. teaches the new asymmetry naturally.
+    // corners get 3 (self + 2 edge neighbors). edges get 4 (self + 2 corners + center).
+    // center gets 5 (self + 4 edges). player discovers center has more reach.
+    target: [3, 4, 3, 4, 5, 4, 3, 4, 3],
+  },
+];
+
+const state = {
+  size: 2,
+  board: [],            // each cell holds accumulated darkness (number)
+  target: [],
+  handUsed: [],         // boolean array, length 4 — which pieces have been placed
+  selectedHandIdx: null,
+  moves: 0,
+  levelIdx: 0,
+  won: false,
+};
+
+function init() {
+  const lvl = LEVELS[state.levelIdx];
+  state.size = lvl.size;
+  const cellCount = lvl.size * lvl.size;
+  state.board = new Array(cellCount).fill(0);
+  state.target = lvl.target.slice();
+  state.handUsed = new Array(cellCount).fill(false);
+  state.selectedHandIdx = null;
+  state.moves = 0;
+  state.won = false;
+
+  buildBoard();
+  buildHand();
+  buildTarget();
+  updateMoveCounter();
+  updateLevel();
+  hideBanner();
+}
+
+function buildBoard() {
+  const board = document.getElementById('board');
+  board.innerHTML = '';
+  board.className = 'board size-' + state.size;
+  board.style.gridTemplateColumns = 'repeat(' + state.size + ', 1fr)';
+  for (let i = 0; i < state.size * state.size; i++) {
+    const cell = document.createElement('div');
+    cell.className = 'cell';
+    cell.dataset.idx = i;
+    const circle = document.createElement('div');
+    circle.className = 'circle';
+    cell.appendChild(circle);
+    cell.addEventListener('click', () => onCellClick(i));
+    board.appendChild(cell);
+  }
+  updateBoardVisuals();
+}
+
+function buildTarget() {
+  const target = document.getElementById('targetBoard');
+  target.innerHTML = '';
+  target.style.gridTemplateColumns = 'repeat(' + state.size + ', 1fr)';
+  let sum = 0;
+  for (let i = 0; i < state.target.length; i++) {
+    sum += state.target[i];
+    const cell = document.createElement('div');
+    cell.className = 'target-cell';
+    const circle = document.createElement('div');
+    circle.className = 'target-circle';
+    circle.style.background = darknessToColor(state.target[i]);
+    circle.style.color = darknessToTextColor(state.target[i]);
+    circle.textContent = state.target[i];
+    cell.appendChild(circle);
+    target.appendChild(cell);
+  }
+  document.getElementById('targetTotal').textContent = 'total: ' + sum;
+}
+
+function buildHand() {
+  const handEl = document.getElementById('hand');
+  handEl.innerHTML = '';
+  for (let idx = 0; idx < state.handUsed.length; idx++) {
+    const piece = document.createElement('div');
+    piece.className = 'hand-piece';
+    if (state.handUsed[idx]) piece.classList.add('used');
+    if (state.selectedHandIdx === idx) piece.classList.add('selected');
+    // each tile in this build adds +1 darkness when placed
+    piece.textContent = '1';
+    piece.addEventListener('click', () => selectHandPiece(idx));
+    handEl.appendChild(piece);
+  }
+}
+
+function selectHandPiece(idx) {
+  if (state.handUsed[idx]) return;
+  state.selectedHandIdx = idx;
+  buildHand();
+}
+
+function updateBoardVisuals() {
+  const cells = document.querySelectorAll('.cell');
+  cells.forEach((cell, i) => {
+    const circle = cell.querySelector('.circle');
+    const v = state.board[i];
+    circle.style.background = darknessToColor(v);
+    circle.style.color = darknessToTextColor(v);
+    circle.textContent = v;
+  });
+}
+
+function updateMoveCounter() {
+  document.getElementById('moveCounter').textContent = 'moves: ' + state.moves;
+}
+
+function updateLevel() {
+  const lvl = LEVELS[state.levelIdx];
+  document.getElementById('levelText').textContent = lvl.name + ' · ' + lvl.size + '×' + lvl.size;
+}
+
+function getOrthogonalNeighbors(idx, size) {
+  const row = Math.floor(idx / size);
+  const col = idx % size;
+  const out = [];
+  if (row > 0) out.push(idx - size);
+  if (row < size - 1) out.push(idx + size);
+  if (col > 0) out.push(idx - 1);
+  if (col < size - 1) out.push(idx + 1);
+  return out;
+}
+
+function onCellClick(cellIdx) {
+  if (state.won) return;
+  if (state.selectedHandIdx === null) {
+    flashHint('select a piece first.');
+    return;
+  }
+
+  // each placement adds +1 darkness to placed cell and each orthogonal neighbor
+  state.board[cellIdx] += 1;
+  const neighbors = getOrthogonalNeighbors(cellIdx, state.size);
+  for (const n of neighbors) {
+    state.board[n] += 1;
+  }
+
+  state.handUsed[state.selectedHandIdx] = true;
+  state.selectedHandIdx = null;
+  state.moves++;
+
+  updateBoardVisuals();
+  buildHand();
+  updateMoveCounter();
+  checkWin();
+}
+
+function checkWin() {
+  // all 4 pieces must be placed
+  if (state.handUsed.some(u => !u)) return false;
+  // and board must match target exactly (integer darkness, so equality is fine)
+  for (let i = 0; i < state.board.length; i++) {
+    if (state.board[i] !== state.target[i]) return false;
+  }
+  state.won = true;
+  document.querySelectorAll('.cell').forEach(c => c.classList.add('match-pulse'));
+  setTimeout(() => {
+    showBanner();
+  }, 400);
+  return true;
+}
+
+function showBanner() {
+  document.getElementById('winBanner').classList.add('visible');
+}
+function hideBanner() {
+  document.getElementById('winBanner').classList.remove('visible');
+}
+
+let hintTimer = null;
+function flashHint(msg) {
+  const h = document.getElementById('hint');
+  const original = 'each placement darkens the cell and its orthogonal neighbors. stack to go deeper.';
+  h.textContent = msg;
+  h.style.color = '#f4d03f';
+  if (hintTimer) clearTimeout(hintTimer);
+  hintTimer = setTimeout(() => {
+    h.textContent = original;
+    h.style.color = '';
+  }, 1800);
+}
+
+document.getElementById('resetBtn').addEventListener('click', () => {
+  init();
+});
+
+document.getElementById('winBanner').addEventListener('click', () => {
+  state.levelIdx = (state.levelIdx + 1) % LEVELS.length;
+  init();
+});
+
+init();
+</script>
+</body>
+</html>
