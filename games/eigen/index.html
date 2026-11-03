@@ -515,7 +515,7 @@
     <button class="btn" id="resetBtn">reset</button>
   </div>
 
-  <div class="hint" id="hint">each placement darkens the cell and its orthogonal neighbors. stack to go deeper. tap a cell with no piece selected to take one back.</div>
+  <div class="hint" id="hint">each placement darkens the cell and its orthogonal neighbors. stack to go deeper. retap a piece to deselect it; tap a cell with nothing selected to take a piece back.</div>
 
   <div class="win-banner" id="winBanner">
     <span id="winText">matched.</span>
@@ -702,7 +702,8 @@ function buildHand() {
 
 function selectHandPiece(idx) {
   if (state.handUsed[idx]) return;
-  state.selectedHandIdx = idx;
+  // retap the selected piece to deselect it (then tapping a cell takes a piece back)
+  state.selectedHandIdx = state.selectedHandIdx === idx ? null : idx;
   buildHand();
 }
 
@@ -810,7 +811,7 @@ function hideBanner() {
 let hintTimer = null;
 function flashHint(msg) {
   const h = document.getElementById('hint');
-  const original = 'each placement darkens the cell and its orthogonal neighbors. stack to go deeper. tap a cell with no piece selected to take one back.';
+  const original = 'each placement darkens the cell and its orthogonal neighbors. stack to go deeper. retap a piece to deselect it; tap a cell with nothing selected to take a piece back.';
   h.textContent = msg;
   h.style.color = '#f4d03f';
   if (hintTimer) clearTimeout(hintTimer);
