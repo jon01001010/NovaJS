@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Games</title>
+<style>
+  :root{--bg:#14161e;--card:#1e2130;--ink:#e8e6e0;--dim:#8a8fa0;--accent:#7ef0dd;--line:rgba(126,240,221,.22)}
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{min-height:100vh;background:var(--bg);color:var(--ink);
+    font-family:ui-monospace,'SF Mono',Menlo,Consolas,monospace;
+    display:flex;flex-direction:column;align-items:center;padding:48px 16px}
+  h1{font-size:13px;letter-spacing:.35em;color:var(--dim);font-weight:400;margin-bottom:28px}
+  .list{display:grid;gap:14px;width:100%;max-width:440px}
+  a{display:block;text-decoration:none;color:inherit;background:var(--card);
+    border:1px solid var(--line);border-radius:14px;padding:18px 20px;transition:border-color .2s,transform .2s}
+  a:hover,a:focus-visible{border-color:var(--accent);transform:translateY(-2px);outline:none}
+  .name{font-size:16px;font-weight:700;color:var(--accent);margin-bottom:6px}
+  .desc{font-size:12px;color:var(--dim);line-height:1.6}
+</style>
+</head>
+<body>
+  <h1>GAMES</h1>
+  <div class="list">
+    <a href="menger-miner/">
+      <div class="name">Menger Miner</div>
+      <div class="desc">Mine, build and automate inside an infinitely zoomable Menger sponge. 3D, saves automatically.</div>
+    </a>
+    <a href="eigen/">
+      <div class="name">eigen</div>
+      <div class="desc">A darkness-stacking puzzle: place pieces so the board matches the target pattern.</div>
+    </a>
+  </div>
+</body>
+</html>

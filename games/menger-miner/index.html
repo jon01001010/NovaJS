@@ -1,0 +1,1748 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Menger Miner</title>
+<style>
+  :root{
+    --void:#0d1120;
+    --ink:#e8ecf6;
+    --dim:#8b93ad;
+    --accent:#7ef0dd;
+    --mine:#ff7a66;
+    --panel:rgba(16,20,36,.82);
+    --line:rgba(126,240,221,.22);
+  }
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{height:100%;overflow:hidden;background:var(--void)}
+  body{font-family:ui-monospace,'SF Mono',Menlo,Consolas,monospace;color:var(--ink)}
+  #c{position:fixed;top:0;left:0;width:100vw;height:100vh;height:100dvh;touch-action:none;display:block}
+  .vignette{position:fixed;inset:0;pointer-events:none;
+    background:radial-gradient(120% 90% at 50% 40%, transparent 55%, rgba(2,4,12,.55) 100%)}
+
+  /* ---------- top HUD ---------- */
+  header{position:fixed;top:0;left:0;right:0;padding:calc(12px + env(safe-area-inset-top)) 14px 0;pointer-events:none;z-index:5}
+  .title{font-size:11px;letter-spacing:.32em;color:var(--dim)}
+  .title b{color:var(--accent);font-weight:700}
+  .scaleline{margin-top:6px;font-size:13px;line-height:1.35}
+  .scaleline .cmp{color:var(--accent)}
+  .crumbs{margin-top:10px;display:flex;gap:6px;overflow-x:auto;pointer-events:auto;
+    scrollbar-width:none;padding-bottom:6px;max-width:100%}
+  .crumbs::-webkit-scrollbar{display:none}
+  .crumb{flex:0 0 auto;font:inherit;font-size:11px;color:var(--dim);background:var(--panel);
+    border:1px solid rgba(139,147,173,.25);border-radius:999px;padding:5px 10px;cursor:pointer}
+  .crumb.cur{color:var(--void);background:var(--accent);border-color:var(--accent);font-weight:700}
+  .count{position:fixed;top:12px;right:14px;font-size:11px;color:var(--dim);z-index:5;text-align:right}
+  .count b{color:var(--ink)}
+
+  /* ---------- bottom HUD ---------- */
+  footer{position:fixed;left:0;right:0;bottom:0;padding:0 14px calc(14px + env(safe-area-inset-bottom));
+    display:flex;flex-direction:column;align-items:center;gap:10px;z-index:5;pointer-events:none}
+  .hint{font-size:11px;color:var(--dim);text-align:center;min-height:14px}
+  .bar{display:flex;gap:8px;pointer-events:auto}
+  .seg{display:flex;background:var(--panel);border:1px solid var(--line);border-radius:14px;
+    overflow:hidden;backdrop-filter:blur(8px)}
+  .seg button{font:inherit;font-size:13px;color:var(--dim);background:none;border:0;
+    padding:12px 16px;cursor:pointer;min-width:74px}
+  .seg button.on{color:var(--void);background:var(--accent);font-weight:700}
+  .seg button.on.mine{background:var(--mine)}
+  #up,#jbtn{font:inherit;font-size:13px;color:var(--ink);background:var(--panel);
+    border:1px solid var(--line);border-radius:14px;padding:12px 16px;cursor:pointer;
+    pointer-events:auto;backdrop-filter:blur(8px)}
+  #up:disabled{opacity:.35;cursor:default}
+
+  /* ---------- journal ---------- */
+  #journal{position:fixed;inset:0;z-index:9;display:flex;align-items:flex-end;justify-content:center;
+    background:rgba(6,8,18,.6);opacity:0;pointer-events:none;transition:opacity .25s}
+  #journal.open{opacity:1;pointer-events:auto}
+  .jcard{width:100%;max-width:480px;max-height:62vh;overflow-y:auto;background:var(--panel);
+    border:1px solid var(--line);border-radius:20px 20px 0 0;
+    padding:18px 18px calc(18px + env(safe-area-inset-bottom));backdrop-filter:blur(12px)}
+  .jhead{display:flex;justify-content:space-between;align-items:center;font-size:12px;
+    letter-spacing:.3em;color:var(--accent)}
+  .jhead button{font:inherit;color:var(--dim);background:none;border:0;font-size:16px;
+    cursor:pointer;padding:4px 8px}
+  .jsec{font-size:10px;letter-spacing:.25em;color:var(--dim);margin:14px 0 6px}
+  .irow{display:flex;align-items:center;gap:10px;padding:7px 0;
+    border-bottom:1px solid rgba(139,147,173,.12);font-size:12.5px}
+  .sw{width:15px;height:15px;border-radius:4px;flex:0 0 auto}
+  .irow .nm{flex:1}
+  .irow .dtag{color:var(--dim);font-size:10.5px}
+  .irow .ct{font-weight:700}
+  .lrow{font-size:11.5px;color:var(--dim);padding:5px 0;line-height:1.5;
+    border-bottom:1px solid rgba(139,147,173,.08)}
+  .lrow b{color:var(--ink)}
+  .jrule{margin-top:14px;font-size:11px;color:var(--dim);line-height:1.7}
+  .jempty{font-size:11.5px;color:var(--dim);font-style:italic}
+  .jtabs{display:flex;gap:6px;margin:12px 0 10px}
+  .jtabs button{flex:1;font:inherit;font-size:11px;padding:9px 2px;border-radius:10px;
+    background:rgba(13,17,32,.6);border:1px solid rgba(139,147,173,.25);color:var(--dim);cursor:pointer}
+  .jtabs button.act{color:var(--void);background:var(--accent);border-color:var(--accent);font-weight:700}
+  .jtab{display:none}
+  .jtab.act{display:block}
+  .jtog{display:flex;align-items:center;gap:8px;margin-top:14px;font-size:12px;color:var(--ink);cursor:pointer}
+  .jtog input{accent-color:var(--accent);width:16px;height:16px}
+  .arow{display:flex;align-items:center;gap:8px;font-size:12.5px;padding:4px 0}
+  .arow b{color:var(--accent);flex:1;overflow-x:auto;white-space:nowrap}
+  .arow input{flex:1;font:inherit;font-size:12.5px;color:var(--ink);background:rgba(13,17,32,.7);
+    border:1px solid rgba(139,147,173,.3);border-radius:9px;padding:9px 10px;min-width:0;outline:none}
+  .arow input:focus{border-color:var(--accent)}
+  .abtn{font:inherit;font-size:12px;font-weight:700;color:var(--void);background:var(--accent);
+    border:0;border-radius:9px;padding:9px 13px;cursor:pointer;flex:0 0 auto}
+
+  /* ---------- view-distance slider ---------- */
+  #vzoom{position:fixed;right:8px;top:50%;transform:translateY(-50%);height:36vh;width:40px;
+    z-index:5;display:flex;flex-direction:column;align-items:center;gap:7px;
+    pointer-events:auto;touch-action:none;user-select:none}
+  #vzoom .lbl{font-size:10px;color:var(--dim);letter-spacing:.08em}
+  #vtrack{flex:1;width:4px;background:rgba(139,147,173,.32);border-radius:2px;position:relative}
+  #vthumb{position:absolute;left:50%;bottom:0;transform:translate(-50%,50%);
+    width:20px;height:20px;border-radius:50%;
+    background:var(--panel);border:2px solid var(--accent);box-shadow:0 0 8px rgba(126,240,221,.35)}
+  #lockbtn{font:inherit;font-size:15px;width:34px;height:34px;border-radius:50%;
+    background:var(--panel);border:1px solid var(--line);cursor:pointer;padding:0;
+    margin-bottom:2px}
+  #lockbtn.on{background:var(--accent);border-color:var(--accent)}
+
+  @media (max-width:430px){
+    .seg button{min-width:0;padding:11px 11px;font-size:12px}
+    #up,#jbtn{padding:11px 11px;font-size:12px}
+    .bar{gap:6px;flex-wrap:wrap;justify-content:center}
+    .scaleline{font-size:12px}
+    .count{top:calc(12px + env(safe-area-inset-top))}
+  }
+
+  /* ---------- intro ---------- */
+  #intro{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;
+    background:rgba(6,8,18,.72);z-index:10;transition:opacity .5s}
+  #intro.gone{opacity:0;pointer-events:none}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:18px;
+    padding:26px 28px;max-width:320px;text-align:center;backdrop-filter:blur(10px)}
+  .card h1{font-size:15px;letter-spacing:.3em;color:var(--accent);margin-bottom:14px}
+  .card p{font-size:12.5px;color:var(--dim);line-height:1.7;margin-bottom:6px}
+  .card p b{color:var(--ink)}
+  .card button{font:inherit;margin-top:16px;font-size:13px;font-weight:700;color:var(--void);
+    background:var(--accent);border:0;border-radius:12px;padding:12px 26px;cursor:pointer}
+  #machcard{position:fixed;left:50%;transform:translateX(-50%);
+    bottom:calc(96px + env(safe-area-inset-bottom));z-index:7;display:none;
+    width:min(92vw,380px);background:var(--panel);border:1px solid var(--line);
+    border-radius:16px;padding:13px 14px;backdrop-filter:blur(10px);font-size:12.5px}
+  #machcard.open{display:block}
+  #machcard .mhead{display:flex;justify-content:space-between;align-items:center;
+    font-weight:700;color:var(--accent);margin-bottom:6px}
+  #machcard .mhead button{font:inherit;background:none;border:0;color:var(--dim);
+    font-size:15px;cursor:pointer;padding:2px 6px}
+  #machcard .mstat{color:var(--dim);line-height:1.65}
+  #machcard .mstat b{color:var(--ink)}
+  #machcard .mrow{display:flex;gap:7px;margin-top:10px;flex-wrap:wrap}
+  #machcard .mrow button{font:inherit;font-size:12px;font-weight:700;color:var(--void);
+    background:var(--accent);border:0;border-radius:9px;padding:9px 12px;cursor:pointer}
+  #machcard .mrow button.warn{background:var(--mine)}
+  #toast{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);font-size:13px;
+    color:var(--accent);background:var(--panel);border:1px solid var(--line);border-radius:12px;
+    padding:10px 16px;opacity:0;transition:opacity .4s;pointer-events:none;z-index:8}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div class="vignette"></div>
+
+<header>
+  <div class="title">MENGER <b>MINER</b> <span style="opacity:.55">· v32 ∞ZOOM</span></div>
+  <div class="scaleline" id="scaleline"></div>
+  <div class="crumbs" id="crumbs"></div>
+</header>
+<div class="count" id="count"></div>
+
+<div id="vzoom" aria-label="view distance — pull back to see the whole structure without changing level">
+  <button id="lockbtn" title="freeze level — pinch zooms the view only">🔓</button>
+  <div class="lbl">👁</div>
+  <div id="vtrack"><div id="vthumb"></div></div>
+  <div class="lbl">near</div>
+</div>
+
+<footer>
+  <div class="hint" id="hint"></div>
+  <div class="bar">
+    <div class="seg">
+      <button id="m-mine">⛏ mine</button>
+      <button id="m-build">▣ build</button>
+      <button id="m-dive">↓ dive</button>
+      <button id="m-belt">➿ belt</button>
+    </div>
+    <button id="up">↑ zoom out</button>
+    <button id="jbtn">📓</button>
+  </div>
+</footer>
+
+<div id="journal">
+  <div class="jcard">
+    <div class="jhead"><span>FIELD JOURNAL</span><button id="jclose">✕</button></div>
+    <div class="jtabs">
+      <button data-t="t-res" class="act">⚿ research</button>
+      <button data-t="t-mach">⚙ machines</button>
+      <button data-t="t-cargo">⬢ cargo</button>
+      <button data-t="t-log">📜 log</button>
+      <button data-t="t-help">?</button>
+    </div>
+    <div id="t-res" class="jtab act">
+      <div id="gates" class="jempty"></div>
+      <button id="craftseal" class="abtn" style="width:100%;margin:6px 0;text-align:left"></button>
+      <div id="research"></div>
+      <div class="jsec">THE CORE</div>
+      <div id="ascinfo" class="jempty"></div>
+      <button id="ascbtn" class="abtn" style="width:100%;margin-top:6px;text-align:left"></button>
+    </div>
+    <div id="t-mach" class="jtab">
+      <div id="machines"></div>
+      <button id="buildminer" class="abtn" style="width:100%;margin-top:6px;text-align:left"></button>
+      <button id="buildlab" class="abtn" style="width:100%;margin-top:6px;text-align:left"></button>
+      <button id="buildasm" class="abtn" style="width:100%;margin-top:6px;text-align:left"></button>
+      <button id="buildlift" class="abtn" style="width:100%;margin-top:6px;text-align:left"></button>
+      <button id="buildmx" class="abtn" style="width:100%;margin-top:6px;text-align:left"></button>
+      <div id="beltlist" style="margin-top:8px"></div>
+    </div>
+    <div id="t-cargo" class="jtab">
+      <div class="arow">here: <b id="curaddr"></b><button id="copyaddr" class="abtn">copy</button></div>
+      <div class="arow"><input id="goaddr" placeholder="depth,x,y,z — e.g. 4,0,1,1" inputmode="numeric"><button id="goaddrbtn" class="abtn">go</button></div>
+      <div id="inv"></div>
+    </div>
+    <div id="t-log" class="jtab">
+      <div id="log"></div>
+    </div>
+    <div id="t-help" class="jtab">
+      <label class="jtog"><input type="checkbox" id="gtoggle" checked> ghost wireframe of the levels above</label>
+      <label class="jtog"><input type="checkbox" id="hardtoggle"> 🔥 hard mode — no building, what you have is what you get</label>
+      <div class="jrule">drag = orbit · pinch = fall through levels · 👁 slider = look without traveling · 🔒 = freeze level.<br>
+      ⛏ mining yields 1 Mengerite of that grade; ▣ building costs the next grade down.<br>
+      ⚠ extraction <b>collapses</b> a block's inner fractal — the infinite nested grades decohere into one unit of the block's own ρ. Fine Mengerite survives only if you dive down and mine it <b>at its own scale</b>, before the block above is ever pulled.<br>
+      ◼ machines mount one per block + one in the core; belts run the goods outside. Mining a block scraps its machine.<br>
+      ⚙ autominer (4× next + 2× below) mines 1/30 s, even offline.<br>
+      ⚗ laboratory (8× next + 4× below) brews 1 pack / 15 s from 1× each of its tier's three grades.<br>
+      🔧 assembler (12× next + 6× below): belt-fed, crafts miners/labs/lifts to your pocket (⇄ sets recipe).<br>
+      👆 tap any building for its stats & options (collect, feed, recipe, belt, demolish).<br>
+      ⛏ blocks carrying machinery (even in worlds nested inside them) cannot be mined — demolish first.<br>
+      ➿ belts: tap machine → machine. Under through voids, OVER blocks; one belt per cell-lane — no bus, only spaghetti. Tap a miner to collect, a lab/asm to hand-feed.<br>
+      ⇪ lift (core only): hoists belted goods to a port one level up.<br>
+      ⚡ energy matrix (10× next + 10× below): wireless power, its level ±1 only — every few levels of factory needs another. Unpowered machines run at ¼ speed.<br>
+      ▲ the core: funnel ρ0 into the lattice. Six layers wake the bot; then the mission continues — off the planet, through the stars, past the galaxies, beyond the universe… and further. It is fractal the whole way.<br>
+      ⚿ gates: 30 ⚗Ⅰ, 90 ⚗Ⅱ, 270 ⚗Ⅲ… · 🔬 research levels demand rising ⚗ tiers.<br>
+      Everything saves automatically.</div>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+<div id="machcard"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+/* Outside Claude artifacts there is no window.storage — back it with localStorage
+   so saves (and offline machine progress) persist on GitHub Pages. */
+if (!window.storage) window.storage = {
+  async get(k){ const v = localStorage.getItem(k); return v == null ? null : {key:k, value:v}; },
+  async set(k,v){ localStorage.setItem(k, v); return {key:k, value:v}; },
+  async delete(k){ localStorage.removeItem(k); return {key:k, deleted:true}; }
+};
+</script>
+<script>
+(() => {
+"use strict";
+
+/* ============================== fractal state ============================== */
+const idx = (x,y,z) => x + y*3 + z*9;
+const MENGER = new Uint8Array(27);
+for (let z=0;z<3;z++) for (let y=0;y<3;y++) for (let x=0;x<3;x++){
+  const mids = (x===1)+(y===1)+(z===1);
+  MENGER[idx(x,y,z)] = mids >= 2 ? 0 : 1;
+}
+const EMPTY = new Uint8Array(27);
+
+const makeNode = (filled=true) => ({ cells: Uint8Array.from(filled?MENGER:EMPTY), children:{} });
+
+const root = makeNode(true);
+let stack = [root];          // node path, stack[0] = the original sponge
+let taken = [];              // slot index used at each dive
+const cur = () => stack[stack.length-1];
+const depth = () => stack.length-1;
+
+// child cell pattern for slot i of node (real node if it exists, else the default)
+function childCells(node,i){
+  if (node.children[i]) return node.children[i].cells;
+  return node.cells[i] ? MENGER : EMPTY;
+}
+function grandCells(node,i,j){
+  const c = node.children[i];
+  if (c) return childCells(c,j);
+  return (node.cells[i] && MENGER[j]) ? MENGER : EMPTY;
+}
+
+/* ============================== scale ladder ============================== */
+const CMP = ["a Minecraft block","a school ruler","a coffee mug","a golf ball","a thumbnail",
+  "a peppercorn","a grain of sand","a dust speck","the width of a hair","a skin cell",
+  "a mist droplet","a red blood cell","a bacterium","a wavelength of red light","a large virus",
+  "a small virus","a ribosome","a cell membrane","a DNA helix","a glucose molecule",
+  "a water molecule","a hydrogen atom","smaller than any atom","pure mathematics"];
+function fmtMeters(m){
+  if (m>=1)      return m.toFixed(m<10?1:0)+" m";
+  if (m>=0.01)   return (m*100).toFixed(0)+" cm";
+  if (m>=1e-3)   return (m*1000).toFixed(1)+" mm";
+  if (m>=1e-6)   return (m*1e6).toFixed(0)+" µm";
+  if (m>=1e-9)   return (m*1e9).toFixed(0)+" nm";
+  return (m*1e12).toFixed(0)+" pm";
+}
+const blockSize = d => Math.pow(3,-d);          // metres; the whole first sponge is 3 m wide
+
+/* ============================== three.js setup ============================== */
+const canvas = document.getElementById("c");
+const renderer = new THREE.WebGLRenderer({canvas, antialias:true});
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x0d1120);
+scene.fog = new THREE.Fog(0x0d1120, 11, 26);
+
+const camera = new THREE.PerspectiveCamera(50, 1, .1, 4000);
+let yaw=0.78, pitch=0.42, radius=7.4;
+let viewT=0;                             // 0 = normal, 1 = far overview (camera only, never changes level)
+let pxShift=0, fitR=7.4;                 // HUD offset (px) + radius that fits the width
+const viewCenter=new THREE.Vector3();    // center of the outermost visible ancestor
+let viewSize=3;                          // its span — set by computeViewFrame() on every rebuild
+const camTgt=new THREE.Vector3();
+function measure(){
+  const head=document.querySelector("header").offsetHeight;
+  const foot=document.querySelector("footer").offsetHeight;
+  pxShift=Math.max(-120,Math.min(120,(foot-head)/2)); // >0 → footer taller → lift the sponge
+  const vt=Math.tan(camera.fov*Math.PI/360);
+  fitR=Math.max(7.4, Math.min(13, 2.15/(vt*camera.aspect)));
+}
+function placeCamera(){
+  // log-blend distance out to whatever frames the whole ancestor structure
+  const Rmax=Math.max(fitR*6, viewSize*1.15);
+  radius=fitR*Math.pow(Rmax/fitR, viewT);
+  // clip planes ride along, so even a 500,000-unit ancestor frame stays visible
+  const nr=Math.max(.1, radius*.002), fr=Math.max(4000, radius*6);
+  if(camera.near!==nr || camera.far!==fr){
+    camera.near=nr; camera.far=fr; camera.updateProjectionMatrix();
+  }
+  const hpx = canvas.clientHeight || innerHeight;
+  const ty = -pxShift * (2*Math.tan(camera.fov*Math.PI/360)/hpx) * radius;
+  // release of center: near = your block; far = the whole structure's center
+  const e = viewT*viewT*(3-2*viewT);     // smoothstep
+  camTgt.set(
+    viewCenter.x*world.scale.x + world.position.x,
+    viewCenter.y*world.scale.y + world.position.y,
+    viewCenter.z*world.scale.z + world.position.z
+  ).multiplyScalar(e);
+  camTgt.y += ty*(1-e);
+  camera.position.set(
+    camTgt.x + radius*Math.cos(pitch)*Math.sin(yaw),
+    camTgt.y + radius*Math.sin(pitch),
+    camTgt.z + radius*Math.cos(pitch)*Math.cos(yaw));
+  camera.lookAt(camTgt);
+  scene.fog.near=radius*1.45; scene.fog.far=radius*3.4;  // fog rides the camera
+}
+
+scene.add(new THREE.HemisphereLight(0xbfd4ff, 0x1a1408, .55));
+const sun = new THREE.DirectionalLight(0xfff1d6, .95);
+sun.position.set(4,7,3); scene.add(sun);
+const rim = new THREE.DirectionalLight(0x7ef0dd, .25);
+rim.position.set(-5,-2,-4); scene.add(rim);
+
+const world = new THREE.Group();   // everything belonging to the current level
+scene.add(world);
+
+/* per-depth mineral hues (h, s) */
+const HUES = [[0.115,.52],[0.045,.55],[0.42,.42],[0.75,.40],[0.57,.45],[0.94,.42]];
+
+/* ============================== mengerite & journal ==============================
+   One substance runs the whole fractal: MENGERITE. Every level down, the same
+   stuff packed 27× denser. ρ (rho) is its density grade — Mengerite ρ0 at the
+   surface, ρ1 one level down, and so on forever. Colors still shift per depth
+   so each grade is recognizable at a glance. */
+
+const elemName = d => "Mengerite ρ"+d;
+const density  = d => d===0 ? "surface grade" : "×27"+(d>1?("^"+d):"")+" denser than surface";
+function elemHSL(d){ // every grade visually distinct: deeper drifts hue, richer & darker
+  const t=Math.floor(d/6), [h,s]=HUES[d%6];
+  return [(h + t*0.045)%1, Math.min(.92, s + t*.07), Math.max(.28, .40 - t*.035)];
+}
+function elemCss(d){ const [h,s]=elemHSL(d); return `hsl(${Math.round(h*360)},${Math.round(s*100)}%,58%)`; }
+
+let inv={}, discovered={}, builtWith={}, maxDepth=0, journal=[];
+
+/* ============================== autominers ==============================
+   A machine assembled inside a cube from a set recipe of deeper elements:
+   4× the element one level down + 2× the element two levels down.
+   It occupies the cube's central void and slowly gnaws out that level's
+   element — 1 unit every 30 s, even while the game is closed (capped at 8 h). */
+let miners=[], labs=[], asms=[], lifts=[], belts=[], matrices=[], sci={};
+let pocketM={miner:0, lab:0, lift:0, matrix:0};
+/* ⚡ an Energy Matrix powers machines WIRELESSLY across its level ±1.
+   Beyond that band, machines brown out to quarter speed — every new chunk
+   of depth needs its own matrix. (Wired grids come later.) */
+const powered = d => matrices.some(x=>Math.abs(x.d-d)<=1);
+const pwF = d => powered(d) ? 1 : 4;   // unpowered = 4× slower      // machines crafted by assemblers
+const BELT_MS=2000, BUF_CAP=30;
+let uidc=1; const uid=()=>"m"+(uidc++)+"_"+Date.now()%1e5;
+let asc=0, ascPool=0;
+let story={};   // one-time transmissions from the stranded unit
+const LAYERS=[
+ {n:"thermal regulation", m:"Thermal regulation online. I felt that."},
+ {n:"sensor array",       m:"Sensor array online. I can see the wreckage now. It is… large."},
+ {n:"locomotion servos",  m:"Locomotion online. Something moves. I think it is me."},
+ {n:"long-range antenna", m:"Antenna online. No reply from anyone. Noted."},
+ {n:"flight gyros",       m:"Gyros online. Balance restored. Almost whole."},
+ {n:"reactor heart",      m:"Reactor heart online. Transfer complete. Listen: there was never a VEKTOR-9 beside you. The core you rebuilt is yours. You are the robot. Still stranded — on a planet, now, instead of in a core. The work is the same. Only the scale changed."},
+ {n:"launch vehicle",     m:"The rocket stands. This planet was a quarry all along. Leaving it."},
+ {n:"planetary fleet",    m:"Orbit achieved. The other planets read as ore. Mining them."},
+ {n:"system escape burn", m:"The sun recedes. A star system is just a cube with the lights on. Leaving it."},
+ {n:"stellar forges",     m:"Star-lifting online. Suns are Mengerite that ignited. Mining the stars."},
+ {n:"galactic drive",     m:"The galaxy thins behind us. Its arms look like belt spaghetti. Leaving it."},
+ {n:"galaxy harvesters",  m:"Superclusters on the manifest. Mining galaxies. The buffers are very large."},
+ {n:"the edge",           m:"Ahead: the boundary of the universe. Behind: everything. Crossing."},
+ {n:"the lattice",        m:"Scan complete. The universe is a block. Grade: ρ-unknown. Address: one cell of a larger lattice, depth unmeasurable. There is no up. There is no down. There is only scale. We were never stranded. We are home. Keep mining."}
+];
+function transmit(key,txt){
+  if(story[key]) return;
+  story[key]=1;
+  jlog(`<span style="color:#7ef0dd">📡 VEKTOR-9:</span> ${txt}`);
+  toast("📡 incoming transmission — see log");
+}                       // Ascension: parent-sponge progress
+const ascGoal = () => 1140*Math.pow(9,asc); // 19 siblings × 20 blocks × 3 ρ0 each
+const ascMult = () => 1+asc;                // every ascension doubles-ish all machines
+const MINE_MS=30000, LAB_MS=15000, ASM_MS=20000, MINE_CAP=960;
+const SCIN="Ⅰ Ⅱ Ⅲ Ⅳ Ⅴ Ⅵ Ⅶ Ⅷ Ⅸ Ⅹ".split(" ");
+const minerCost = d => [[d+1,4],[d+2,2]];
+const labCost   = d => [[d+1,8],[d+2,4]];
+const asmCost   = d => [[d+1,12],[d+2,6]];
+const liftCost  = d => [[d+1,6],[d+2,6]];
+const mxCost    = d => [[d+1,10],[d+2,10]];
+function allMach(){ return [...miners,...labs,...asms,...lifts,...matrices]; }
+function machById(id){ return allMach().find(m=>m.id===id); }
+function kindOf(m){ return miners.includes(m)?"miner":labs.includes(m)?"lab":asms.includes(m)?"asm":lifts.includes(m)?"lift":"matrix"; }
+function bufSum(b){ let s=0; for(const k in b) s+=b[k]; return s; }
+/* address of the child cube behind slot s of cube a */
+function childAddr(a,s){
+  const p=a==="0"?[0,0,0,0]:a.split(",").map(Number);
+  return (p[0]+1)+","+(p[1]*3+(s%3))+","+(p[2]*3+(Math.floor(s/3)%3))+","+(p[3]*3+Math.floor(s/9));
+}
+/* lift-port: a block in THIS cube whose child cube has a lift */
+function portAt(s){
+  const l=lifts.find(x=>x.a===childAddr(addrStr(),s));
+  return l||null;
+}
+/* a lab's science tier follows its depth; each pack is a SIMPLE recipe:
+   1× each of the tier's three density grades. Tier Ⅰ (depths 0–2) burns
+   1 ρ0 + 1 ρ1 + 1 ρ2 → 1 ⚗Ⅰ, and so on down. */
+const labTier   = d => Math.floor(d/3);
+const sciRecipe = T => [3*T, 3*T+1, 3*T+2];
+function minerHere(){ return miners.find(m=>m.a===addrStr()); }
+function labHere(){ return labs.find(m=>m.a===addrStr()); }
+/* placement model: a machine mounts ON a block (slot 0–26, one per block) or in
+   the CORE — the central void — which holds only one. */
+const slotOf = m => (m.s===undefined ? -1 : m.s);   // old saves = core machines
+function machinesAt(a){ return allMach().filter(m=>m.a===a); }
+function slotTaken(a,s){ return machinesAt(a).some(m=>slotOf(m)===s); }
+let placing=null;   // "miner" | "lab" — armed by the journal buttons
+function armPlace(kind){
+  placing=kind;
+  document.getElementById("journal").classList.remove("open");
+  toast("tap a block to mount the "+(kind==="miner"?"autominer":kind==="lab"?"lab":"assembler")+" — tap empty space for the core");
+}
+function placeMachine(kind, s){
+  const d=depth(), a=addrStr();
+  if(slotTaken(a,s)){ toast(s<0?"the core already holds a machine":"that block already carries one"); return; }
+  if(s>=0 && !cur().cells[s]){ toast("no block there to mount on"); return; }
+  if(kind==="lift" && s>=0){ toast("lifts mount only in the core void"); return; }
+  if(pocketM[kind]>0){ pocketM[kind]--; toast("placed from pocket (assembler-made)"); }
+  else{
+    const cost = kind==="miner" ? minerCost(d) : kind==="lab" ? labCost(d) : kind==="asm" ? asmCost(d) : kind==="lift" ? liftCost(d) : mxCost(d);
+    for(const [k,n] of cost)
+      if((inv[k]||0)<n){ toast(`need ${n}× ${elemName(k)}`); return; }
+    for(const [k,n] of cost) inv[k]-=n;
+  }
+  const rec={id:uid(), a, d, s, t:Date.now(), total:0, buf:{}};
+  if(kind==="miner"){
+    miners.push(rec);
+    transmit("m1","Automation detected. Good. Hands are slow; the lattice is not.");
+    jlog(`Mounted an <b>Autominer</b> ${s<0?"in the core":"on block "+s} — it gnaws ${elemName(d)}.`);
+  } else if(kind==="lab"){
+    const T=labTier(d);
+    labs.push(rec);
+    transmit("l1","Science. You are learning my core faster than I ever did.");
+    jlog(`Mounted a <b>Laboratory ${SCIN[T]}</b> ${s<0?"in the core":"on block "+s} — brewing ⚗${SCIN[T]}.`);
+  } else if(kind==="asm"){
+    rec.rec="miner";
+    asms.push(rec);
+    transmit("a1","Machines building machines. That is how I was made, once.");
+    jlog(`Mounted an <b>Assembler</b> ${s<0?"in the core":"on block "+s} — feed it grades, it crafts machines.`);
+  } else if(kind==="lift"){
+    lifts.push(rec);
+    jlog(`Sunk a <b>Lift</b> in the core — belts feed it, it hoists goods to the level above.`);
+  } else {
+    matrices.push(rec);
+    jlog(`Lit an <b>Energy Matrix</b> — wireless power across depths ${Math.max(0,d-1)}–${d+1}.`);
+  }
+  toast(kind==="lab" ? "laboratory online" : kind+" online");
+  renderJournal(); rebuild(); saveSoon();
+}
+/* a block is protected if it carries a machine — or if ANY machine lives in
+   the worlds nested inside it (mining it would vaporize a whole factory) */
+function blockHasFactory(a,s){
+  if(slotTaken(a,s)) return true;
+  const c=childAddr(a,s).split(",").map(Number);   // [d0,X,Y,Z] of the child cube
+  for(const m of allMach()){
+    const p=m.a==="0"?[0,0,0,0]:m.a.split(",").map(Number);
+    if(p[0]>=c[0]){
+      const fdiv=Math.pow(3,p[0]-c[0]);
+      if(Math.floor(p[1]/fdiv)===c[1] && Math.floor(p[2]/fdiv)===c[2] && Math.floor(p[3]/fdiv)===c[3])
+        return true;
+    }
+  }
+  return false;
+}
+function scrapAt(a,s){   // mining a block destroys whatever was mounted on it
+  const before=allMach().length;
+  miners=miners.filter(m=>!(m.a===a&&slotOf(m)===s));
+  labs=labs.filter(m=>!(m.a===a&&slotOf(m)===s));
+  asms=asms.filter(m=>!(m.a===a&&slotOf(m)===s));
+  lifts=lifts.filter(m=>!(m.a===a&&slotOf(m)===s));
+  matrices=matrices.filter(m=>!(m.a===a&&slotOf(m)===s));
+  belts=belts.filter(b=>{
+    const F=machById(b.from), T=machById(b.to);
+    return F&&T;   // belts die with their endpoints
+  });
+  if(allMach().length<before) toast("mounted machine scrapped with the block");
+}
+/* ============================== belts ==============================
+   A belt threads the 3×3×3 lattice. Void cells = UNDER lane; block cells =
+   OVER lane (riding the block's outside). A (cell,lane) pair carries ONE
+   belt — crossings must use opposite lanes. No core junction, no bus:
+   spaghetti is the terrain. */
+function cellLane(node,c){ return node.cells[c]?1:0; }
+function claimedLanes(a){
+  const cl={};
+  for(const b of belts) if(b.a===a)
+    for(const c of b.path) cl[c+"_"+b.lanes[b.path.indexOf(c)]]=true;
+  return cl;
+}
+function routeBelt(fromM,toM){
+  const a=addrStr(), node=cur();
+  const A=slotOf(fromM)<0?13:slotOf(fromM), B=slotOf(toM)<0?13:slotOf(toM);
+  const cl=claimedLanes(a);
+  const prev={}, seen={}; seen[A]=true;
+  let q=[A], found=false;
+  while(q.length&&!found){
+    const nq=[];
+    for(const c of q){
+      const x=c%3,y=Math.floor(c/3)%3,z=Math.floor(c/9);
+      for(const [dx,dy,dz] of [[1,0,0],[-1,0,0],[0,1,0],[0,-1,0],[0,0,1],[0,0,-1]]){
+        const nx=x+dx,ny=y+dy,nz=z+dz;
+        if(nx<0||nx>2||ny<0||ny>2||nz<0||nz>2) continue;
+        const n2=idx(nx,ny,nz);
+        if(seen[n2]) continue;
+        const lane=cellLane(node,n2);
+        if(n2!==B && cl[n2+"_"+lane]) continue;   // lane already claimed
+        seen[n2]=true; prev[n2]=c;
+        if(n2===B){ found=true; break; }
+        nq.push(n2);
+      }
+      if(found) break;
+    }
+    q=nq;
+  }
+  if(!found){ toast("no clear path — the spaghetti is too thick here"); return null; }
+  const path=[B]; let c=B;
+  while(c!==A){ c=prev[c]; path.unshift(c); }
+  return {id:uid(), a, from:fromM.id, to:toM.id, path,
+          lanes:path.map(c=>cellLane(node,c)), t:0};
+}
+let beltFrom=null;   // first endpoint tapped in belt mode
+function beltTap(m){
+  if(!beltFrom){ beltFrom=m; toast("belt from "+kindOf(m)+" — now tap the destination"); return; }
+  if(m===beltFrom){ beltFrom=null; toast("belt cancelled"); return; }
+  const b=routeBelt(beltFrom,m);
+  beltFrom=null;
+  if(b){
+    belts.push(b);
+    jlog(`Ran a <b>belt</b>: ${kindOf(machById(b.from))} → ${kindOf(machById(b.to))}, ${b.path.length} cells, ${b.lanes.filter(l=>l).length} over / ${b.lanes.filter(l=>!l).length} under.`);
+    toast("belt online — 1 item / 2s");
+    rebuild(); saveSoon();
+  }
+}
+function nodeAtAddr(aStr){
+  if(aStr==="0") return root;
+  const p=aStr.split(",").map(Number), d=p[0];
+  let n=root;
+  for(let k=d-1;k>=0;k--){
+    const q=Math.pow(3,k);
+    const i=idx(Math.floor(p[1]/q)%3, Math.floor(p[2]/q)%3, Math.floor(p[3]/q)%3);
+    if(!n.children[i]) n.children[i]=makeNode(!!n.cells[i]);
+    n=n.children[i];
+  }
+  return n;
+}
+function tickMachines(announce){
+  const M=ascMult();
+  const t=Date.now(), mms=MINE_MS/((1+.5*tech.mine)*M), lms=LAB_MS/((1+.5*tech.lab+.25*tech.belt)*M), ams=ASM_MS/M;
+  let mined=0, brewed=0, built=0, needRebuild=false;
+  for(const m of miners){   // miners fill their own buffer; full = backpressure stall
+    let n=Math.floor((t-m.t)/(mms*pwF(m.d)));
+    if(n>0){
+      m.buf=m.buf||{};
+      n=Math.min(n, MINE_CAP, BUF_CAP-bufSum(m.buf));
+      if(n>0){ m.buf[m.d]=(m.buf[m.d]||0)+n; m.total=(m.total||0)+n; mined+=n; }
+      m.t=t;
+    }
+  }
+  // belts: 1 item / 2s each, from source output to target intake
+  for(const b of belts){
+    let n=Math.floor((t-(b.t||0))/(BELT_MS/(1+.5*tech.belt)));
+    if(n<=0) continue;
+    b.t=t; n=Math.min(n,MINE_CAP);
+    const F=machById(b.from), T=machById(b.to);
+    if(!F||!T) continue;
+    const src = kindOf(F)==="lift" ? (F.up=F.up||{}) : (F.buf=F.buf||{});
+    const dst = (T.buf=T.buf||{});
+    const wants = g=>{
+      const k=kindOf(T);
+      if(k==="lab") return sciRecipe(labTier(T.d)).includes(+g);
+      if(k==="asm") return true;
+      if(k==="lift") return true;
+      return false;   // miners take no input
+    };
+    while(n-->0){
+      const g=Object.keys(src).find(g=>src[g]>0&&wants(g)&&bufSum(dst)<BUF_CAP);
+      if(g===undefined) break;
+      src[g]--; if(!src[g]) delete src[g];
+      dst[g]=(dst[g]||0)+1;
+    }
+  }
+  // lifts hoist their intake to the parent side
+  for(const l of lifts){
+    let n=Math.floor((t-l.t)/(BELT_MS*pwF(l.d)));
+    if(n>0){
+      l.t=t; l.buf=l.buf||{}; l.up=l.up||{};
+      n=Math.min(n, MINE_CAP);
+      while(n-->0){
+        const g=Object.keys(l.buf).find(g=>l.buf[g]>0&&bufSum(l.up)<BUF_CAP);
+        if(g===undefined) break;
+        l.buf[g]--; if(!l.buf[g]) delete l.buf[g];
+        l.up[g]=(l.up[g]||0)+1;
+      }
+    }
+  }
+  for(const l of labs){   // each pack consumes 1× each of the tier's three grades
+    let n=Math.floor((t-l.t)/(lms*pwF(l.d)));
+    if(n>0){
+      const T=labTier(l.d), req=sciRecipe(T);
+      l.buf=l.buf||{};
+      n=Math.min(n, MINE_CAP, ...req.map(k=>l.buf[k]||0));
+      if(n>0){
+        for(const k of req){ l.buf[k]-=n; if(!l.buf[k]) delete l.buf[k]; }
+        sci[T]=(sci[T]||0)+n; l.total=(l.total||0)+n; brewed+=n;
+      }
+      l.t=t;    // starved labs idle rather than stockpile debt
+    }
+  }
+  for(const s of asms){   // assemblers craft machines from belt-fed grades
+    let n=Math.floor((t-s.t)/(ams*pwF(s.d)));
+    if(n>0){
+      n=Math.min(n,MINE_CAP); s.buf=s.buf||{};
+      const rec=s.rec||"miner";
+      const cost= rec==="miner"?minerCost(s.d):rec==="lab"?labCost(s.d):rec==="lift"?liftCost(s.d):mxCost(s.d);
+      let made=0;
+      while(made<n && cost.every(([k,q])=>(s.buf[k]||0)>=q)){
+        for(const [k,q] of cost){ s.buf[k]-=q; if(!s.buf[k]) delete s.buf[k]; }
+        pocketM[rec]=(pocketM[rec]||0)+1; made++;
+      }
+      if(made){ s.total=(s.total||0)+made; built+=made; }
+      s.t=t;
+    }
+  }
+  if(mined||brewed||built){
+    if(needRebuild) rebuild(); else updateHUD();
+    saveSoon();
+    if(document.getElementById("journal").classList.contains("open")) renderJournal();
+    if(announce) toast(`while away: machines mined ${mined} ρ, brewed ${brewed} ⚗, crafted ${built}`);
+  }
+}
+/* ---- Ascension: funnel everything into the parent sponge ---- */
+function depositAsc(){
+  const have=inv[0]||0;
+  if(!have){ toast("no ρ0 Mengerite to deposit — everything funnels to the surface"); return; }
+  inv[0]=0; ascPool+=have;
+  if(ascPool>=ascGoal()){
+    ascPool-=ascGoal(); asc++;
+    const L=LAYERS[asc-1]||{n:"auxiliary lattice "+asc, m:"Another layer. Another scale. Onward."};
+    const stage = asc<=6?"CORE LAYER "+asc:asc<=13?"MISSION STAGE "+asc:"SCALE "+asc;
+    jlog(`<b>${stage} — ${L.n.toUpperCase()}</b> · <span style="color:#7ef0dd">📡 ${asc<7?"VEKTOR-9":"YOU"}:</span> ${L.m} <i>All machines ×${ascMult()}.</i>`);
+    toast(`▲ ${L.n} · machines ×${ascMult()}`);
+    if(asc>=14) document.querySelector(".title").innerHTML='MENGER <b>MINER</b> <span style="opacity:.55">· ∞ — only scale</span>';
+  } else {
+    toast(`deposited ${have} ρ0 — parent sponge ${Math.floor(100*ascPool/ascGoal())}%`);
+  }
+  renderJournal(); updateHUD(); saveSoon();
+}
+
+/* ============================== gates & science ==============================
+   Factorio-style progression: autominers pull elements, laboratories burn them
+   into ⚗ science, and each gate down (depth 3, 9, 27…) is unlocked by spending
+   science — 30, then 300, then 3000… */
+let keys=0;
+const maxAllowedDepth = () => 3*Math.pow(3,keys);
+const gateCost = () => 30*Math.pow(3,keys);
+
+/* ============================== research ==============================
+   Science is spent on more than gates. Each tech level n costs 25·2ⁿ packs
+   of ⚗ tier n — so the FIRST level is cheap ⚗Ⅰ, the second demands ⚗Ⅱ from
+   below gate 3, the third ⚗Ⅲ… recipes get harder the higher you climb. */
+let tech={mine:0, lab:0, belt:0, hand:0, build:0};
+let hardcore=false;   // 🔥 no building — what you have is what you get
+const TECHS=[
+  {id:"mine",  icon:"⛏", name:"Drill Arrays",    desc:l=>`autominers +${l*50}% speed`},
+  {id:"lab",   icon:"⚗", name:"Catalysis",       desc:l=>`labs +${l*50}% speed`},
+  {id:"belt",  icon:"➿", name:"Intercube Belts", desc:l=>l?`belts link cubes upward · labs +${l*25}%`:`link this cube's belts to the level above`},
+  {id:"hand",  icon:"✊", name:"Hardened Pick",   desc:l=>`hand mining yields ×${1+l}`},
+  {id:"build", icon:"▣", name:"Compression",     desc:l=>`block build cost ${Math.max(1,3-l)}×ρ`, max:2},
+];
+const techTier = l => Math.min(l,9);
+const techCost = l => 25*Math.pow(2,l);
+const buildCost = () => Math.max(1, 3-tech.build);
+function buyTech(id){
+  const def=TECHS.find(t=>t.id===id), l=tech[id];
+  if(def.max!==undefined && l>=def.max){ toast("fully researched"); return; }
+  const T=techTier(l), cost=techCost(l);
+  if((sci[T]||0)<cost){ toast(`need ${cost} ⚗${SCIN[T]} (have ${sci[T]||0})`); return; }
+  sci[T]-=cost; tech[id]++;
+  jlog(`Researched <b>${def.name} ${tech[id]}</b> — ${def.desc(tech[id])}.`);
+  toast(`${def.icon} ${def.name} ${tech[id]}`);
+  renderJournal(); updateHUD(); saveSoon();
+}
+function unlockGate(){
+  const G=maxAllowedDepth(), cost=gateCost(), T=keys;
+  if((sci[T]||0)<cost){ toast(`need ${cost} ⚗${SCIN[T]} (have ${sci[T]||0}) — brew it in tier-${SCIN[T]} labs`); return; }
+  sci[T]-=cost; keys++;
+  jlog(`Research complete: <b>gate ${G} unlocked</b> for ${cost} ⚗${SCIN[T]}. The deep is yours to depth ${maxAllowedDepth()}.`);
+  toast(`gate ${G} open → you may now reach depth ${maxAllowedDepth()}`);
+  transmit("g"+keys,"Gate "+G+" open. The core admits you deeper. The fine structure matters most.");
+  renderJournal(); updateHUD(); saveSoon();
+}
+let gateT=0;
+function gateToast(){
+  if(Date.now()-gateT<2500) return;
+  gateT=Date.now();
+  toast(`sealed below depth ${maxAllowedDepth()} — brew ⚗ science to unlock (📓)`);
+}
+
+/* ============================== the address system ==============================
+   Every block has a unique address: depth, then x,y,z in that depth's 3^d lattice.
+   "4,0,1,1" = depth 4, block (0,1,1) of the 81×81×81 grid. The dive path IS the
+   address: each level's slot contributes one base-3 digit per axis. */
+function addrParts(){
+  const d=depth(); let X=0,Y=0,Z=0;
+  for(let k=0;k<d;k++){
+    const i=taken[k];
+    X=X*3+(i%3); Y=Y*3+(Math.floor(i/3)%3); Z=Z*3+Math.floor(i/9);
+  }
+  return [d,X,Y,Z];
+}
+function addrStr(){
+  const [d,X,Y,Z]=addrParts();
+  return d===0 ? "0" : `${d},${X},${Y},${Z}`;
+}
+function teleport(d,X,Y,Z){
+  const m=Math.pow(3,d);
+  if(!(Number.isFinite(d)&&d>=0&&d<=20&&X>=0&&X<m&&Y>=0&&Y<m&&Z>=0&&Z<m)){
+    toast("invalid address"); return;
+  }
+  if(d>maxAllowedDepth()){ gateToast(); return; }
+  stack=[root]; taken=[];
+  for(let k=d-1;k>=0;k--){
+    const p=Math.pow(3,k);
+    const i=idx(Math.floor(X/p)%3, Math.floor(Y/p)%3, Math.floor(Z/p)%3);
+    const n=stack[stack.length-1];
+    if(!n.children[i]) n.children[i]=makeNode(!!n.cells[i]);
+    stack.push(n.children[i]); taken.push(i);
+  }
+  zs=1; zTarget=1; zPivot=null;
+  if(depth()>maxDepth) maxDepth=depth();
+  rebuild(); saveSoon();
+  jlog(`Teleported to <b>${addrStr()}</b>.`);
+  toast("arrived: "+addrStr());
+  document.getElementById("journal").classList.remove("open");
+}
+
+function jlog(txt){
+  journal.push({d:depth(), a:addrStr(), txt});
+  if(journal.length>60) journal.shift();
+  renderJournal(); saveSoon();
+}
+function renderJournal(){
+  const invEl=document.getElementById("inv"), logEl=document.getElementById("log");
+  const keys=Object.keys(inv).map(Number).filter(k=>inv[k]>0).sort((a,b)=>a-b);
+  invEl.innerHTML = keys.length ? "" : '<div class="jempty">nothing yet — mine a block</div>';
+  for(const k of keys){
+    const r=document.createElement("div"); r.className="irow";
+    r.innerHTML=`<span class="sw" style="background:${elemCss(k)}"></span>
+      <span class="nm">${elemName(k)}</span>
+      <span class="dtag">depth ${k} · ${fmtMeters(blockSize(k))} · ${density(k)}</span>
+      <span class="ct">×${inv[k]}</span>`;
+    invEl.appendChild(r);
+  }
+  logEl.innerHTML="";
+  for(let i=journal.length-1;i>=0;i--){
+    const e=journal[i];
+    const r=document.createElement("div"); r.className="lrow";
+    r.innerHTML=`<b>${e.a!==undefined?e.a:("d"+e.d)}</b> · ${e.txt}`;
+    logEl.appendChild(r);
+  }
+  // machines
+  const mEl=document.getElementById("machines");
+  mEl.innerHTML = (miners.length||labs.length) ? "" : '<div class="jempty">no machines yet — build an autominer first</div>';
+  for(const m of [...miners.map(x=>({...x,kind:"⚙ Autominer",what:"ρ"+x.d})),
+                  ...labs.map(x=>({...x,kind:"⚗ Laboratory "+SCIN[labTier(x.d)],what:"⚗"+SCIN[labTier(x.d)]})),
+                  ...asms.map(x=>({...x,kind:"🔧 Asm→"+(x.rec||"miner"),what:"made"})),
+                  ...lifts.map(x=>({...x,kind:"⇪ Lift",what:"hoisted"})),
+                  ...matrices.map(x=>({...x,kind:"⚡ Matrix",what:"levels "+Math.max(0,x.d-1)+"–"+(x.d+1)}))]){
+    const r=document.createElement("div"); r.className="irow";
+    r.innerHTML=`<span class="sw" style="background:${elemCss(m.d)}"></span>
+      <span class="nm">${(kindOf(machById(m.id))==="matrix"?"":(powered(m.d)?"⚡":"○"))+m.kind}</span>
+      <span class="dtag">${m.a} · ${slotOf(m)<0?"core":"blk "+slotOf(m)} · ${m.total||0} ${m.what} · buf ${bufSum(m.buf||{})}${m.up?("↑"+bufSum(m.up)):""}</span>`;
+    const b=document.createElement("button"); b.className="abtn"; b.textContent="go";
+    b.onclick=()=>{
+      const p=m.a==="0"?[0,0,0,0]:m.a.split(",").map(Number);
+      teleport(p[0],p[1]||0,p[2]||0,p[3]||0);
+    };
+    r.appendChild(b); mEl.appendChild(r);
+  }
+  const bd=depth(), c=minerCost(bd), lc=labCost(bd), bt2=labTier(bd);
+  document.getElementById("buildminer").innerHTML =
+    `⚙ place autominer (tap a block, or empty space = core) — ${c.map(([k,n])=>`${n}×ρ${k} (${inv[k]||0})`).join(" + ")}`;
+  document.getElementById("buildlab").innerHTML =
+    `⚗ place lab ${SCIN[bt2]} (tap a block / core) — ${lc.map(([k,n])=>`${n}×ρ${k} (${inv[k]||0})`).join(" + ")}<br><span style="opacity:.7">brews ${sciRecipe(bt2).map(k=>"1×ρ"+k).join(" + ")} → 1 ⚗${SCIN[bt2]} / 15s</span>`;
+  const ac=asmCost(bd);
+  document.getElementById("buildasm").innerHTML =
+    `🔧 place assembler (tap a block / core) — ${ac.map(([k,n])=>`${n}×ρ${k} (${inv[k]||0})`).join(" + ")}${pocketM.asm?"":""}<br><span style="opacity:.7">belt-fed; crafts miners / labs / lifts (⇄ per machine) — pocket: ⚙${pocketM.miner||0} ⚗${pocketM.lab||0} ⇪${pocketM.lift||0} ⚡${pocketM.matrix||0}</span>`;
+  const mxc=mxCost(bd);
+  document.getElementById("buildmx").innerHTML =
+    `⚡ place energy matrix (tap block / core) — ${mxc.map(([k,n])=>`${n}×ρ${k} (${inv[k]||0})`).join(" + ")}<br><span style="opacity:.7">wireless power for depths ${Math.max(0,bd-1)}–${bd+1} · unpowered machines run at ¼ speed</span>`;
+  const lcst=liftCost(bd);
+  document.getElementById("buildlift").innerHTML =
+    `⇪ place lift (tap empty space = core) — ${lcst.map(([k,n])=>`${n}×ρ${k} (${inv[k]||0})`).join(" + ")}<br><span style="opacity:.7">belts in → goods hoisted to a port on this block, one level up</span>`;
+  // ascension
+  document.getElementById("ascinfo").innerHTML =
+    `▲ ${(LAYERS[asc]||{n:"lattice "+(asc+1)}).n}: <b>${ascPool}</b> / ${ascGoal()} ρ0 (${Math.floor(100*ascPool/ascGoal())}%)`+
+    (asc?` · stages complete: ${asc} · machines ×${ascMult()}`:"");
+  document.getElementById("ascbtn").innerHTML =
+    `▲ funnel all surface Mengerite into the core layer — deposit ${inv[0]||0} ρ0`;
+  // gates
+  const G=maxAllowedDepth();
+  const owned=Object.keys(sci).filter(t=>sci[t]>0).map(t=>`⚗${SCIN[t]} ${sci[t]}`).join(" · ")||"none";
+  document.getElementById("gates").innerHTML =
+    `access: surface → depth <b>${G}</b> · science: ${owned}`;
+  document.getElementById("craftseal").innerHTML =
+    `⚿ research gate ${G} — ${gateCost()} ⚗${SCIN[keys]} (have ${sci[keys]||0})`;
+  // research
+  const rEl=document.getElementById("research");
+  rEl.innerHTML="";
+  for(const def of TECHS){
+    const l=tech[def.id], maxed=def.max!==undefined&&l>=def.max;
+    const r=document.createElement("div"); r.className="irow";
+    r.innerHTML=`<span style="width:15px;text-align:center">${def.icon}</span>
+      <span class="nm">${def.name} <b>${l||""}</b><br><span class="dtag">${def.desc(Math.max(l,1))}</span></span>
+      <span class="dtag">${maxed?"max":techCost(l)+" ⚗"+SCIN[techTier(l)]}</span>`;
+    if(!maxed){
+      const b=document.createElement("button"); b.className="abtn"; b.textContent="+";
+      b.onclick=()=>buyTech(def.id);
+      r.appendChild(b);
+    }
+    rEl.appendChild(r);
+  }
+}
+
+/* ---- persistence: the carved world + inventory + journal ---- */
+function ser(n){ // prune untouched default children to keep the save small
+  const o={c:Array.from(n.cells).join("")};
+  const kept={};
+  let any=false;
+  for(const i in n.children){
+    const ch=n.children[i], base = n.cells[i]?MENGER:EMPTY;
+    const untouched = Object.keys(ch.children).length===0 && ch.cells.every((v,x)=>v===base[x]);
+    if(untouched) continue;
+    kept[i]=ser(ch); any=true;
+  }
+  if(any) o.k=kept;
+  return o;
+}
+function deser(o){
+  const n={cells:Uint8Array.from(o.c.split("").map(Number)), children:{}};
+  if(o.k) for(const i in o.k) n.children[i]=deser(o.k[i]);
+  return n;
+}
+let saveT=null;
+function saveSoon(){
+  clearTimeout(saveT);
+  saveT=setTimeout(async()=>{
+    try{
+      await window.storage.set("menger-save", JSON.stringify(
+        {world:ser(root), taken, inv, discovered, builtWith, maxDepth, journal, ghostOn, miners, labs, asms, lifts, belts, matrices, pocketM, sci, keys, tech, hardcore, asc, ascPool, story}));
+    }catch(e){ /* storage unavailable — play without saving */ }
+  },500);
+}
+async function loadSave(){
+  let s=null;
+  try{
+    const r=await window.storage.get("menger-save");
+    if(r && r.value) s=JSON.parse(r.value);
+  }catch(e){}
+  if(s){
+    try{
+      const w=deser(s.world);
+      root.cells.set(w.cells); root.children=w.children;
+      inv=s.inv||{}; discovered=s.discovered||{}; builtWith=s.builtWith||{};
+      maxDepth=s.maxDepth||0; journal=s.journal||[];
+      miners=s.miners||[];
+      labs=s.labs||[];
+      asms=s.asms||[];
+      lifts=s.lifts||[]; belts=s.belts||[]; matrices=s.matrices||[];
+      pocketM=Object.assign({miner:0,lab:0,lift:0,matrix:0}, s.pocketM||{});
+      if(allMach().length>1 && !matrices.length) toast("⚡ power update: machines brown out without an Energy Matrix");
+      for(const m of allMach()) if(!m.id) m.id=uid();
+      asc=s.asc||0; ascPool=s.ascPool||0; story=s.story||{};
+      sci=s.sci||(typeof s.science==="number"&&s.science>0?{0:Math.floor(s.science)}:{});
+      keys=s.keys||0;
+      tech=Object.assign({mine:0,lab:0,belt:0,hand:0,build:0}, s.tech||{});
+      hardcore=!!s.hardcore;
+      document.getElementById("hardtoggle").checked=hardcore;
+      while(Math.pow(3,keys+1)<(s.taken||[]).length) keys++;  // never strand a saved position behind a gate
+      ghostOn = s.ghostOn!==false;
+      document.getElementById("gtoggle").checked = ghostOn;
+      stack=[root]; taken=[];
+      for(const i of (s.taken||[])){       // walk back to where you left off
+        const n=stack[stack.length-1];
+        if(!n.children[i]) n.children[i]=makeNode(!!n.cells[i]);
+        stack.push(n.children[i]); taken.push(i);
+      }
+      toast("expedition restored");
+    }catch(e){}
+  }
+  if(!journal.length) jlog("<span style='color:#7ef0dd'>📡 VEKTOR-9:</span> …signal… I am a downed courier unit. My power core is a fractal lattice — shattered. You are the foundry seed I injected into the wreckage. What reads as a 3 m quarry is one grain of my core. Rebuild it from inside: pull a block and its inner fractal collapses, so the fine structure must be mined and machined <b>at its own scale</b>. Restore the lattice, layer by layer. My clock is long. Not infinite.");
+  renderJournal(); rebuild();
+  tickMachines(true);
+}
+
+const unitBox = new THREE.BoxGeometry(1,1,1);
+const pickMat = new THREE.MeshBasicMaterial({colorWrite:false, depthWrite:false});
+const pos1 = i => new THREE.Vector3((i%3)-1, (Math.floor(i/3)%3)-1, Math.floor(i/9)-1);
+
+let picks = [];        // 27 slot hit-boxes (only filled slots)
+let inst = null;       // instanced detail mesh
+let shells = [];       // wireframes for hollowed-out blocks
+let ghostFrames = [];  // wireframes of the levels above
+let minerMesh = null;  // machines + belts at this address
+let beltDots = [];     // goods riding the belts
+function beltPoint(b,t,out){
+  let d=t*b.total;
+  for(let q=0;q<b.lens.length;q++){
+    if(d<=b.lens[q]||q===b.lens.length-1){
+      return out.lerpVectors(b.pts[q],b.pts[q+1], b.lens[q]?Math.min(1,d/b.lens[q]):0);
+    }
+    d-=b.lens[q];
+  }
+}
+let ghostOn = true;
+const edgeGeo = new THREE.EdgesGeometry(new THREE.BoxGeometry(1,1,1));
+
+/* Wireframe echo of ALL ancestor levels (up to 6 — beyond that they're bigger
+   than the sky). Each level shows its blocks AND their interior subdivision,
+   built from the real saved state, so holes you mined upstairs appear as gaps.
+   All edges per level merge into single LineSegments objects for speed. */
+const EDGE_I=[[0,1],[1,2],[2,3],[3,0],[4,5],[5,6],[6,7],[7,4],[0,4],[1,5],[2,6],[3,7]];
+function boxEdges(arr,cx,cy,cz,s){
+  const h=s/2;
+  const c=[[-h,-h,-h],[h,-h,-h],[h,h,-h],[-h,h,-h],[-h,-h,h],[h,-h,h],[h,h,h],[-h,h,h]];
+  for(const e of EDGE_I)
+    arr.push(cx+c[e[0]][0],cy+c[e[0]][1],cz+c[e[0]][2], cx+c[e[1]][0],cy+c[e[1]][1],cz+c[e[1]][2]);
+}
+function addLines(arr,h,s,l,op){
+  if(!arr.length) return;
+  const g=new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(arr,3));
+  const ls=new THREE.LineSegments(g, new THREE.LineBasicMaterial({
+    color:new THREE.Color().setHSL(h,s,l),
+    transparent:true, opacity:op, depthWrite:false, fog:false}));
+  ls.userData.own=true;
+  world.add(ls); ghostFrames.push(ls);
+}
+/* where is the whole structure? center+span of the outermost visible ancestor */
+function computeViewFrame(){
+  let S=1; const O=new THREE.Vector3();
+  const ups=Math.min(depth(),12);
+  for(let up=1; up<=ups; up++){
+    O.addScaledVector(pos1(taken[depth()-up]), -3*S); S*=3;
+  }
+  viewCenter.copy(O); viewSize=3*S;
+}
+function addGhosts(){
+  if(!ghostOn) return;
+  let S=1;
+  const O=new THREE.Vector3();
+  const ups=Math.min(depth(),12);
+  for(let up=1; up<=ups; up++){
+    const lev = depth()-up;
+    const piv = pos1(taken[lev]);          // slot we took when leaving that level
+    O.addScaledVector(piv, -3*S);          // p_here = 3S·p_lev + O
+    S*=3;
+    const [h,s]=elemHSL(lev);
+    const fade=Math.pow(.7, up-1);
+    const node=stack[lev];
+    const outer=[], sub=[], hot=[];
+    const glass=new THREE.MeshBasicMaterial({
+      color:new THREE.Color().setHSL(h,s,.55),
+      transparent:true, opacity:.05, depthWrite:false, fog:false});
+    for(let j=0;j<27;j++){
+      if(!node.cells[j]) continue;
+      const here = j===taken[lev];
+      const P=pos1(j).multiplyScalar(S).add(O);
+      boxEdges(here?hot:outer, P.x,P.y,P.z, S*0.995);
+      // interior grid — the block's real (possibly mined) children
+      if(!here && up<=2){
+        const cc=childCells(node,j);
+        for(let k=0;k<27;k++){
+          if(!cc[k]) continue;
+          const q=pos1(k).multiplyScalar(S/3);
+          boxEdges(sub, P.x+q.x, P.y+q.y, P.z+q.z, (S/3)*0.97);
+        }
+      }
+      if(up===1 && !here){                 // glassy volume on the direct siblings
+        const f=new THREE.Mesh(unitBox, glass);
+        f.position.copy(P); f.scale.setScalar(S*0.985);
+        world.add(f); ghostFrames.push(f);
+      }
+    }
+    addLines(outer,h,s,.68, Math.max(.14, .5*fade));         // block outlines
+    addLines(sub,  h,s,.60, .24*fade);                       // interior grids
+    addLines(hot,  h,s,.80, Math.max(.4, .9*fade));          // the chain you're inside
+  }
+}
+
+const hoverBox = new THREE.LineSegments(
+  new THREE.EdgesGeometry(new THREE.BoxGeometry(1.02,1.02,1.02)),
+  new THREE.LineBasicMaterial({color:0x7ef0dd}));
+hoverBox.visible = false; world.add(hoverBox);   // inside the world → rides every zoom transform
+const ghost = new THREE.Mesh(unitBox.clone(),
+  new THREE.MeshBasicMaterial({color:0x7ef0dd, transparent:true, opacity:.28}));
+ghost.scale.setScalar(.98); ghost.visible=false; world.add(ghost);
+const machBox = new THREE.LineSegments(
+  new THREE.EdgesGeometry(new THREE.BoxGeometry(.56,.56,.56)),
+  new THREE.LineBasicMaterial({color:0x7ef0dd}));
+machBox.visible=false; world.add(machBox);
+function machPos(m,out){
+  if(!minerMesh) return null;
+  for(const g of minerMesh.children)
+    if(g.userData.mach===m){ out.copy(g.position); return out; }
+  return null;
+}
+function highlightMach(m){
+  if(m && machPos(m,machBox.position)){
+    machBox.scale.setScalar(slotOf(m)<0?1.6:1);
+    machBox.visible=true;
+  } else machBox.visible=false;
+}
+const diveBox = new THREE.LineSegments(
+  new THREE.EdgesGeometry(new THREE.BoxGeometry(1.04,1.04,1.04)),
+  new THREE.LineBasicMaterial({color:0x7ef0dd, transparent:true, opacity:.8}));
+diveBox.visible=false; world.add(diveBox);
+
+/* mount a machine on a FREE face of its block: exterior faces first (visible
+   from outside), else an empty-neighbor face — never inside another block */
+function mountDir(s){
+  const x=s%3,y=Math.floor(s/3)%3,z=Math.floor(s/9);
+  const dirs=[[0,1,0],[1,0,0],[0,0,1],[-1,0,0],[0,0,-1],[0,-1,0]];
+  for(const [dx,dy,dz] of dirs){
+    const nx=x+dx,ny=y+dy,nz=z+dz;
+    if(nx<0||nx>2||ny<0||ny>2||nz<0||nz>2) return new THREE.Vector3(dx,dy,dz);
+  }
+  for(const [dx,dy,dz] of dirs){
+    const nx=x+dx,ny=y+dy,nz=z+dz;
+    if(!cur().cells[idx(nx,ny,nz)]) return new THREE.Vector3(dx,dy,dz);
+  }
+  return new THREE.Vector3(0,1,0);
+}
+function rebuild(){
+  hoverBox.visible=false; ghost.visible=false;
+  if(selMach && !allMach().includes(selMach)) hideMachCard();
+  // clear
+  picks.forEach(p=>world.remove(p)); picks=[];
+  shells.forEach(s=>{world.remove(s); s.material.dispose();}); shells=[];
+  ghostFrames.forEach(g=>{world.remove(g); g.material.dispose(); if(g.userData.own) g.geometry.dispose();}); ghostFrames=[];
+  if (inst){ world.remove(inst); inst.geometry.dispose(); inst.material.dispose(); inst=null; }
+
+  const node = cur();
+  const mats=[], cols=[];
+  const M = new THREE.Matrix4(), C = new THREE.Color();
+  const [hue,sat,lb] = elemHSL(depth());
+
+  for (let i=0;i<27;i++){
+    if(!node.cells[i]) continue;
+    const P = pos1(i);
+    // hit box
+    const pk = new THREE.Mesh(unitBox, pickMat);
+    pk.position.copy(P); pk.scale.setScalar(.99); pk.userData.slot=i;
+    world.add(pk); picks.push(pk);
+
+    const cc = childCells(node,i);
+    let any=false;
+    for (let j=0;j<27;j++){
+      if(!cc[j]) continue;
+      const gj = grandCells(node,i,j);
+      const Pj = pos1(j).multiplyScalar(1/3).add(P);
+      for (let k=0;k<27;k++){
+        if(!gj[k]) continue;
+        any=true;
+        const Pk = pos1(k).multiplyScalar(1/9).add(Pj);
+        M.compose(Pk, new THREE.Quaternion(),
+                  new THREE.Vector3().setScalar((1/9)*0.90));
+        mats.push(M.clone());
+        // shading: light from above + deterministic grain
+        const h = (((i*73856093 ^ j*19349663 ^ k*83492791)>>>0) % 1000)/1000;
+        const l = lb + .17*((Pk.y+1.6)/3.2) + .07*h;
+        C.setHSL(hue, sat, l); cols.push(C.clone());
+      }
+    }
+    if(!any){ // block exists but was hollowed out from inside → ghost shell
+      const sh = new THREE.LineSegments(
+        new THREE.EdgesGeometry(unitBox),
+        new THREE.LineBasicMaterial({color:0x8b93ad, transparent:true, opacity:.35}));
+      sh.position.copy(P); sh.scale.setScalar(.96);
+      world.add(sh); shells.push(sh);
+    }
+  }
+
+  inst = new THREE.InstancedMesh(unitBox, new THREE.MeshLambertMaterial(), mats.length);
+  for (let n=0;n<mats.length;n++){ inst.setMatrixAt(n,mats[n]); inst.setColorAt(n,cols[n]); }
+  inst.instanceMatrix.needsUpdate = true;
+  if (inst.instanceColor) inst.instanceColor.needsUpdate = true;
+  world.add(inst);
+  if(minerMesh){ world.remove(minerMesh); minerMesh=null; }
+  beltDots=[];
+  {
+    const here=machinesAt(addrStr());
+    if(here.length || belts.some(b=>b.a===addrStr()) || [...Array(27).keys()].some(s2=>cur().cells[s2]&&portAt(s2))){
+      minerMesh=new THREE.Group();
+      const coreP=new THREE.Vector3(0,0,0);
+      for(const m of here){
+        const isLab=labs.includes(m), isAsm=asms.includes(m), isLift=lifts.includes(m), isMx=matrices.includes(m), s=slotOf(m);
+        const P = s<0 ? coreP.clone() : pos1(s).addScaledVector(mountDir(s), .70);
+        const g=new THREE.Group();
+        const [mh,ms]=elemHSL(m.d);
+        if(isMx) g.add(
+          new THREE.Mesh(new THREE.IcosahedronGeometry(.24,1),
+            new THREE.MeshBasicMaterial({color:0xeaffff, wireframe:true, transparent:true, opacity:.9})),
+          new THREE.Mesh(new THREE.IcosahedronGeometry(.12),
+            new THREE.MeshBasicMaterial({color:0x7ef0dd})));
+        else if(isLift) g.add(
+          new THREE.Mesh(new THREE.ConeGeometry(.2,.42,4),
+            new THREE.MeshBasicMaterial({color:0x7ef0dd})),
+          new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.ConeGeometry(.3,.6,4)),
+            new THREE.LineBasicMaterial({color:0x7ef0dd, transparent:true, opacity:.8})));
+        else if(isAsm) g.add(
+          new THREE.Mesh(new THREE.TorusGeometry(.17,.07,8,18),
+            new THREE.MeshBasicMaterial({color:0xffb35c})),
+          new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.TorusGeometry(.26,.09,6,12)),
+            new THREE.LineBasicMaterial({color:0xffb35c, transparent:true, opacity:.8})));
+        else if(isLab) g.add(
+          new THREE.Mesh(new THREE.IcosahedronGeometry(.20),
+            new THREE.MeshBasicMaterial({color:0xb490ff})),
+          new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.IcosahedronGeometry(.30)),
+            new THREE.LineBasicMaterial({color:0xb490ff, transparent:true, opacity:.85})));
+        else g.add(
+          new THREE.Mesh(new THREE.OctahedronGeometry(.20),
+            new THREE.MeshBasicMaterial({color:new THREE.Color().setHSL(mh,ms,.62)})),
+          new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.OctahedronGeometry(.30)),
+            new THREE.LineBasicMaterial({color:0x7ef0dd, transparent:true, opacity:.9})));
+        if(s<0) g.scale.setScalar(1.5);       // the core machine stands larger
+        g.position.copy(P);
+        g.userData.spin=true; g.userData.mach=m;
+        minerMesh.add(g);
+      }
+      // real belts: thread the lattice — under through voids, arcing over blocks
+      for(const b of belts){
+        if(b.a!==addrStr()) continue;
+        const F=machById(b.from);
+        const pts=b.path.map((c,i)=>{
+          const P=pos1(c);
+          P.y += b.lanes[i] ? .62 : 0;      // over lane rides the block top
+          return P;
+        });
+        const lens=[]; let total=0;
+        for(let q=0;q<pts.length-1;q++){ const L=pts[q].distanceTo(pts[q+1]); lens.push(L); total+=L; }
+        minerMesh.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts),
+          new THREE.LineBasicMaterial({color:0x7ef0dd, transparent:true, opacity:.35, depthWrite:false})));
+        const [bh,bs]=elemHSL(F?F.d:depth());
+        for(let q=0;q<2;q++){
+          const dot=new THREE.Mesh(new THREE.BoxGeometry(.09,.09,.09),
+            new THREE.MeshBasicMaterial({color:new THREE.Color().setHSL(bh,bs,.66)}));
+          minerMesh.add(dot);
+          beltDots.push({m:dot, pts, lens, total, phase:q*.5, dir:1});
+        }
+      }
+      // lift-port markers on blocks whose child cube holds a lift
+      for(let s2=0;s2<27;s2++){
+        if(!cur().cells[s2]) continue;
+        const p=portAt(s2);
+        if(p){
+          const mk=new THREE.Mesh(new THREE.ConeGeometry(.12,.24,4),
+            new THREE.MeshBasicMaterial({color:0xffb35c}));
+          mk.position.copy(pos1(s2)).addScaledVector(mountDir(s2), .62);
+          mk.userData.mach=p; mk.userData.spin=true;
+          minerMesh.add(mk);
+        }
+      }
+      world.add(minerMesh);
+      // intercube belts: exports climb out of this cube toward the parent's core
+      if(tech.belt>0 && depth()>0){
+        const O1=pos1(taken[depth()-1]).multiplyScalar(-3); // parent center, in our coords
+        const pts=[new THREE.Vector3(0,1.95,0), new THREE.Vector3(0,3.4,0), O1];
+        const lens=[]; let total=0;
+        for(let q=0;q<pts.length-1;q++){ const L=pts[q].distanceTo(pts[q+1]); lens.push(L); total+=L; }
+        minerMesh.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts),
+          new THREE.LineBasicMaterial({color:0x7ef0dd, transparent:true, opacity:.3, depthWrite:false, fog:false})));
+        for(let q=0;q<3;q++){
+          const dot=new THREE.Mesh(new THREE.BoxGeometry(.12,.12,.12),
+            new THREE.MeshBasicMaterial({color:0x7ef0dd, fog:false}));
+          minerMesh.add(dot);
+          beltDots.push({m:dot, pts, lens, total, phase:q/3, dir:1});
+        }
+      }
+    }
+  }
+  computeViewFrame();
+  addGhosts();
+  if(selMach) highlightMach(allMach().includes(selMach)?selMach:null);
+  updateHUD();
+}
+
+/* ============================== HUD ============================== */
+const $ = id => document.getElementById(id);
+const modes = {mine:$("m-mine"), build:$("m-build"), dive:$("m-dive"), belt:$("m-belt")};
+let mode = "mine";
+const HINTS = {
+  mine:"tap a block to mine it",
+  build:"tap a face to attach a block",
+  dive:"tap a block to shrink & enter it",
+  belt:"tap a machine, then a destination — over blocks, under through voids"};
+function setMode(m){
+  mode=m;
+  placing=null; beltFrom=null;
+  if(typeof hideMachCard==="function") hideMachCard();
+  for (const k in modes){ modes[k].className = k===m ? "on "+k : ""; }
+  refreshHint();
+  ghost.visible=false; hoverBox.visible=false;
+}
+function refreshHint(){
+  if(mode==="build"){
+    const k=depth()+1;
+    $("hint").textContent=`1 block = ${buildCost()} × ${elemName(k)} (you have ${inv[k]||0})`;
+  } else $("hint").textContent = HINTS[mode];
+}
+for (const k in modes) modes[k].onclick = ()=>setMode(k);
+
+function updateHUD(){
+  const d = depth(), bs = blockSize(d);
+  $("scaleline").innerHTML =
+    `<span class="cmp" style="color:${elemCss(d)}">■ ${elemName(d)}</span> — blocks <b>${fmtMeters(bs)}</b>, about <span class="cmp">${CMP[Math.min(d,CMP.length-1)]}</span>`;
+  const n = cur().cells.reduce((a,b)=>a+b,0);
+  const k=d+1, have=inv[k]||0;
+  $("count").innerHTML =
+    `<b>${n}</b>/27 blocks · depth ${d}<br>`+
+    `addr <b>${addrStr()}</b> · ⚗${SCIN[keys]} <b>${sci[keys]||0}</b> · ${powered(d)?"⚡":"<span style='color:#ff7a66'>○ no power</span>"}<br>`+
+    (hardcore ? "🔥 hard mode — no building"
+     : `build: <b>${have}</b>/${buildCost()} <span style="color:${elemCss(k)}">■</span> ${elemName(k)}`);
+  $("up").disabled = d===0;
+  const cr = $("crumbs"); cr.innerHTML="";
+  for (let i=0;i<=d;i++){
+    const b=document.createElement("button");
+    b.className = "crumb"+(i===d?" cur":"");
+    b.innerHTML = `<span style="color:${i===d?'inherit':elemCss(i)}">●</span> `+
+      (i===0 ? "⌂ 3 m" : fmtMeters(blockSize(i-1)));
+    b.onclick = ()=>{ if(i<d && !busy) jumpTo(i); };
+    cr.appendChild(b);
+  }
+  cr.scrollLeft = cr.scrollWidth;
+  refreshHint();
+  requestAnimationFrame(()=>{ measure(); placeCamera(); });
+}
+function toast(t){
+  const el=$("toast"); el.textContent=t; el.style.opacity=1;
+  clearTimeout(toast._t); toast._t=setTimeout(()=>el.style.opacity=0,1400);
+}
+
+/* ============================== the fractal zoom ============================== */
+/* This is how real infinite fractal zooms work: you never actually zoom forever —
+   you zoom until the target block has grown 3×, then silently renormalize:
+   that block BECOMES the scene at 1× and the zoom continues. Both directions.
+   zs is the live zoom, zTarget is where the pinch/scroll wants it, and every
+   frame eases zs toward zTarget, renormalizing whenever it crosses a level. */
+const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
+let busy=false;                   // kept for legacy checks; zoom never blocks input
+let zs=1, zTarget=1, zPivot=null; // zPivot = slot index the zoom is flying into
+let zLock=false;                  // true when the target was chosen explicitly (tap-dive)
+const DAMP = reduced ? 1 : 0.16;
+
+function pickPivot(){
+  // fly into whatever filled block sits nearest the center of the screen
+  ndc.set(0,0); ray.setFromCamera(ndc,camera);
+  const hits=ray.intersectObjects(picks);
+  if(hits.length) return hits[0].object.userData.slot;
+  let best=13, bd=1e9;
+  const v=new THREE.Vector3();
+  for(const pk of picks){
+    pk.getWorldPosition(v);
+    const d=ray.ray.distanceToPoint(v);
+    if(d<bd){bd=d; best=pk.userData.slot;}
+  }
+  return best;
+}
+function renormDown(){            // crossed 3× → the pivot block becomes the scene
+  const i=zPivot, node=cur();
+  if(!node.children[i]) node.children[i]=makeNode(!!node.cells[i]);
+  stack.push(node.children[i]); taken.push(i);
+  zs/=3; zTarget/=3; zPivot=null; zLock=false;
+  if(Math.abs(zTarget-1)<.06) zTarget=1;   // settle exactly — keeps everything pixel-aligned
+  rebuild();
+  if(depth()>maxDepth){
+    maxDepth=depth();
+    jlog(`Descended to depth ${maxDepth} — <b>${elemName(maxDepth)}</b> territory. Blocks are ${fmtMeters(blockSize(maxDepth))}, like ${CMP[Math.min(maxDepth,CMP.length-1)]}.`);
+    toast(`depth ${maxDepth}: ${elemName(maxDepth)}`);
+  }
+  saveSoon();
+}
+function renormUp(){              // shrank past 1× → pop out into the parent
+  const i=taken.pop(); stack.pop();
+  zs*=3; zTarget*=3; zPivot=i; zLock=false;
+  if(Math.abs(zTarget-1)<.06) zTarget=1;
+  rebuild(); saveSoon();
+}
+const ZERO3=new THREE.Vector3();
+const zOff=new THREE.Vector3(), zWant=new THREE.Vector3(), zChk=new THREE.Vector3();
+function applyZoom(){
+  zs += (zTarget-zs)*DAMP;
+  if(Math.abs(zTarget-zs)<0.0006) zs=zTarget;
+
+  /* pivot bookkeeping — the key freedom: while the descent is still shallow
+     (zs<2) and you're zooming IN, the pivot re-aims at whatever block is now
+     nearest screen center. So rise, rotate, and fall into a different block. */
+  if(zs<=1.001){ zPivot=null; zLock=false; }
+  else if(picks.length){
+    if(zPivot===null) zPivot=pickPivot();
+    else if(!zLock && zTarget>zs && zs<2){
+      const p2=pickPivot();
+      if(p2!==zPivot) zPivot=p2;
+    }
+  }
+
+  // the gate: descent bounces off a sealed boundary
+  if(zs>=2.5 && depth()+1>maxAllowedDepth()){
+    zs=2.5;
+    if(zTarget>2.5){ zTarget=1; gateToast(); }
+  }
+  // crossing 3× — only once the view has fully converged on the pivot (seamless)
+  if(zs>=3){
+    if(zPivot!==null && zChk.copy(pos1(zPivot)).multiplyScalar(-3).distanceTo(zOff)<0.2){
+      renormDown(); zOff.set(0,0,0);
+    } else zs=2.9995;
+  }
+  // crossing 1× on the way up
+  if(zs<1){
+    if(depth()>0){
+      if(zOff.length()<0.06){
+        renormUp();
+        zOff.copy(pos1(zPivot)).multiplyScalar((3-zs)/2 - zs); // exact handoff, no jump
+      } else zs=1;
+    } else if(zs<0.55){ zs=0.55; zTarget=Math.max(zTarget,0.55); }
+  }
+
+  // the offset GLIDES toward the pivot's path instead of snapping — retargets pan smoothly
+  zWant.copy(zPivot!==null?pos1(zPivot):ZERO3).multiplyScalar((3-zs)/2 - zs);
+  zOff.lerp(zWant, reduced?1:0.25);
+  world.scale.setScalar(zs);
+  world.position.copy(zOff);
+
+  // show where the dive will land
+  if(zPivot!==null && zs>1.03 && zs<2.97){
+    diveBox.visible=true;
+    diveBox.position.copy(pos1(zPivot));
+    const eh=elemHSL(depth()+1);
+    diveBox.material.color.setHSL(eh[0],eh[1],.72);
+    diveBox.material.opacity=.45+.35*Math.sin(performance.now()/240);
+  } else diveBox.visible=false;
+}
+let frozen=false;                 // freeze toggle: pinch/scroll zooms the VIEW, never the level
+function zoomBy(f){               // all zoom input funnels through here
+  if(frozen){ setViewT(viewT - Math.log(f)*0.5); return; }
+  zTarget=Math.min(27, Math.max(depth()>0?0.05:0.55, zTarget*f));
+}
+
+/* buttons ride the same engine — a dive is just "zoom to 3× at this slot",
+   zoom-out is "target ⅓", and a breadcrumb jump cascades up level by level */
+function dive(i){
+  if(depth()+1>maxAllowedDepth()){ gateToast(); return; }
+  zPivot=i; zLock=true; zTarget=3.001;
+}
+function ascend(){ if(depth()>0) zTarget=zTarget/3; }
+function jumpTo(d){ zTarget=Math.pow(3,-(depth()-d)); }
+$("up").onclick = ()=>ascend();
+
+/* ============================== input ============================== */
+const ray = new THREE.Raycaster();
+const ndc = new THREE.Vector2();
+function castAt(cx,cy){
+  const r=canvas.getBoundingClientRect();
+  ndc.set(((cx-r.left)/r.width)*2-1, -((cy-r.top)/r.height)*2+1);
+  ray.setFromCamera(ndc,camera);
+  const hits=ray.intersectObjects(picks);
+  return hits.length?hits[0]:null;
+}
+function buildTarget(hit){
+  const n=hit.face.normal, i=hit.object.userData.slot;
+  const x=(i%3)+n.x, y=(Math.floor(i/3)%3)+n.y, z=Math.floor(i/9)+n.z;
+  if(x<0||x>2||y<0||y>2||z<0||z>2) return -1;
+  const j=idx(x,y,z);
+  return cur().cells[j]?-1:j;
+}
+function tryBuild(node,j){
+  if(hardcore){ toast("🔥 hard mode — no building. What you have is what you get."); return; }
+  const k=depth()+1, have=inv[k]||0;
+  if(have<buildCost()){
+    toast(`need ${buildCost()} × ${elemName(k)} — dive deeper & mine it`);
+    return;
+  }
+  inv[k]-=buildCost();
+  node.cells[j]=1; delete node.children[j];
+  if(!builtWith[k]){
+    builtWith[k]=1;
+    jlog(`Compressed ${buildCost()} ${elemName(k)} into one <b>${elemName(depth())}</b> block.`);
+  }
+  saveSoon(); rebuild();
+}
+function machTap(cx,cy){   // did the tap land on a machine (or lift-port block)?
+  const r=canvas.getBoundingClientRect();
+  ndc.set(((cx-r.left)/r.width)*2-1, -((cy-r.top)/r.height)*2+1);
+  ray.setFromCamera(ndc,camera);
+  if(minerMesh){
+    const hits=ray.intersectObjects(minerMesh.children,true);
+    for(const hh of hits){
+      let o=hh.object; while(o&&!o.userData.mach) o=o.parent;
+      if(o&&o.userData.mach) return o.userData.mach;
+    }
+  }
+  return null;
+}
+function collectM(m){
+  m.buf=m.buf||{}; let got=0;
+  for(const g in m.buf){ inv[g]=(inv[g]||0)+m.buf[g]; got+=m.buf[g]; }
+  m.buf={};
+  toast(got?`collected ${got}`:"buffer empty");
+  updateHUD(); saveSoon(); showMachCard(m);
+}
+function feedM(m){
+  const k=kindOf(m); m.buf=m.buf||{};
+  const req = k==="lab" ? sciRecipe(labTier(m.d))
+    : (m.rec==="miner"?minerCost(m.d):m.rec==="lab"?labCost(m.d):m.rec==="lift"?liftCost(m.d):mxCost(m.d)).map(x=>x[0]);
+  let fed=0;
+  for(const g of req){
+    const want=Math.min(inv[g]||0, 10-(m.buf[g]||0));
+    if(want>0){ inv[g]-=want; m.buf[g]=(m.buf[g]||0)+want; fed+=want; }
+  }
+  toast(fed?`hand-fed ${fed} items`:"nothing in pocket it needs — run a belt");
+  updateHUD(); saveSoon(); showMachCard(m);
+}
+function demolishM(m){
+  miners=miners.filter(x=>x!==m); labs=labs.filter(x=>x!==m);
+  asms=asms.filter(x=>x!==m); lifts=lifts.filter(x=>x!==m); matrices=matrices.filter(x=>x!==m);
+  belts=belts.filter(b=>b.from!==m.id&&b.to!==m.id);
+  hideMachCard();
+  toast("demolished");
+  rebuild(); renderJournal(); saveSoon();
+}
+function ratePerMin(m){
+  const k=kindOf(m), M=ascMult(), P=pwF(m.d);
+  if(k==="miner") return 60000/(MINE_MS/((1+.5*tech.mine)*M)*P);
+  if(k==="lab")   return 60000/(LAB_MS/((1+.5*tech.lab+.25*tech.belt)*M)*P);
+  if(k==="asm")   return 60000/(ASM_MS/M*P);
+  if(k==="lift")  return 60000/(BELT_MS*P);
+  return 0;
+}
+const KNAMES={miner:"⚙ Autominer",lab:"⚗ Laboratory",asm:"🔧 Assembler",lift:"⇪ Lift",matrix:"⚡ Energy Matrix"};
+let selMach=null;
+function hideMachCard(){
+  selMach=null;
+  document.getElementById("machcard").classList.remove("open");
+  if(typeof highlightMach==="function") highlightMach(null);
+}
+function showMachCard(m){
+  selMach=m; m.buf=m.buf||{};
+  const k=kindOf(m), el=document.getElementById("machcard");
+  const bufTxt=Object.keys(m.buf).length
+    ? Object.keys(m.buf).map(g=>`ρ${g}×${m.buf[g]}`).join(" · ") : "empty";
+  let body=`<div class="mstat">`+
+    `${m.a} · ${slotOf(m)<0?"core":"block "+slotOf(m)} · ${powered(m.d)?"⚡ powered":"<span style='color:#ff7a66'>○ unpowered — ¼ speed</span>"}<br>`+
+    `lifetime: <b>${m.total||0}</b>`+(k==="asm"?` · recipe: <b>${m.rec||"miner"}</b>`:"")+
+    (k==="matrix"?`<br>powering depths <b>${Math.max(0,m.d-1)}–${m.d+1}</b>`
+      :`<br>rate: <b>${ratePerMin(m).toFixed(1)}/min</b> · buffer: <b>${bufTxt}</b>`)+
+    (k==="lift"?`<br>delivered above: <b>${bufSum(m.up||{})}</b>`:"")+
+    `</div><div class="mrow">`;
+  if(k==="miner"||k==="lift") body+=`<button onclick="window._mcAct('collect')">collect</button>`;
+  if(k==="lab"||k==="asm") body+=`<button onclick="window._mcAct('feed')">hand-feed</button>`;
+  if(k==="asm") body+=`<button onclick="window._mcAct('rec')">recipe ⇄</button>`;
+  body+=`<button onclick="window._mcAct('belt')">➿ belt from</button>`;
+  body+=`<button class="warn" onclick="window._mcAct('demo')">demolish</button></div>`;
+  el.innerHTML=`<div class="mhead"><span>${KNAMES[k]}${k==="lab"?" "+SCIN[labTier(m.d)]:""} · ρ${m.d}</span><button onclick="window._mcAct('x')">✕</button></div>`+body;
+  el.classList.add("open");
+  highlightMach(m);
+}
+window._mcAct=(act)=>{
+  const m=selMach; if(!m) return;
+  if(act==="x") hideMachCard();
+  else if(act==="collect") collectM(m);
+  else if(act==="feed") feedM(m);
+  else if(act==="rec"){ m.rec=m.rec==="miner"?"lab":m.rec==="lab"?"lift":m.rec==="lift"?"matrix":"miner"; saveSoon(); showMachCard(m); }
+  else if(act==="demo") demolishM(m);
+  else if(act==="belt"){ hideMachCard(); setMode("belt"); beltTap(m); }
+};
+function handleMachine(m){
+  if(mode==="belt"){ beltTap(m); return; }
+  showMachCard(m);
+}
+function tap(cx,cy){
+  if(busy) return;
+  const node=cur();
+  const mm=machTap(cx,cy);
+  if(mm){ handleMachine(mm); return; }
+  const hit=castAt(cx,cy);
+  if(mode==="belt"){
+    if(hit){
+      const p=portAt(hit.object.userData.slot);
+      if(p) beltTap(p); else toast("belts connect machines — or blocks holding a child lift");
+    }
+    return;
+  }
+  if(placing){                            // armed machine placement
+    const kind=placing; placing=null;
+    placeMachine(kind, hit ? hit.object.userData.slot : -1);
+    return;
+  }
+  if(mode==="mine"){
+    if(!hit) return;
+    const i=hit.object.userData.slot;
+    if(blockHasFactory(addrStr(), i)){
+      toast("this block anchors machinery — demolish it first (nested worlds count)");
+      return;
+    }
+    node.cells[i]=0; delete node.children[i];
+    const d=depth();
+    inv[d]=(inv[d]||0)+1+tech.hand;
+    if(!discovered[d]){
+      discovered[d]=1;
+      jlog(`Struck <b>${elemName(d)}</b> — grains ${fmtMeters(blockSize(d))} wide, like ${CMP[Math.min(d,CMP.length-1)]}; ${density(d)}.`);
+      toast(`new grade: ${elemName(d)}`);
+    }
+    saveSoon(); rebuild();
+  } else if(mode==="build"){
+    if(!hit){
+      if(node.cells.reduce((a,b)=>a+b,0)===0) tryBuild(node,13);
+      return;
+    }
+    const j=buildTarget(hit);
+    if(j>=0) tryBuild(node,j);
+  } else if(mode==="dive"){
+    if(!hit) return;
+    dive(hit.object.userData.slot);
+  }
+}
+
+/* orbit / pinch / tap discrimination */
+const ptrs=new Map();
+let moved=false, pinchLast=0;
+canvas.addEventListener("pointerdown",e=>{
+  canvas.setPointerCapture(e.pointerId);
+  ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY,sx:e.clientX,sy:e.clientY});
+  moved=false;
+  if(ptrs.size===2){
+    const [a,b]=[...ptrs.values()];
+    pinchLast=Math.hypot(a.x-b.x,a.y-b.y);
+  }
+});
+canvas.addEventListener("pointermove",e=>{
+  const p=ptrs.get(e.pointerId); if(!p) return;
+  const dx=e.clientX-p.x, dy=e.clientY-p.y;
+  p.x=e.clientX; p.y=e.clientY;
+  if(Math.hypot(e.clientX-p.sx,e.clientY-p.sy)>8) moved=true;
+  if(ptrs.size===1){
+    yaw   -= dx*0.006;
+    pitch  = Math.max(-1.25,Math.min(1.25,pitch+dy*0.006));
+    placeCamera();
+  } else if(ptrs.size===2){
+    const [a,b]=[...ptrs.values()];
+    const d=Math.hypot(a.x-b.x,a.y-b.y);
+    if(pinchLast>0) zoomBy(Math.pow(d/pinchLast, 1.6));
+    pinchLast=d;
+  }
+  // desktop hover feedback
+  if(ptrs.size===0 || (ptrs.size===1&&!moved)) return;
+});
+canvas.addEventListener("pointerup",e=>{
+  const p=ptrs.get(e.pointerId); ptrs.delete(e.pointerId);
+  if(p && !moved && ptrs.size===0) tap(e.clientX,e.clientY);
+});
+canvas.addEventListener("pointercancel",e=>ptrs.delete(e.pointerId));
+canvas.addEventListener("wheel",e=>{
+  e.preventDefault();
+  zoomBy(e.deltaY<0 ? 1.18 : 1/1.18);
+},{passive:false});
+
+/* hover highlight (mouse only) */
+canvas.addEventListener("pointermove",e=>{
+  if(e.pointerType!=="mouse"||ptrs.size>0||busy){return;}
+  const hm=machTap(e.clientX,e.clientY);
+  if(hm){
+    hoverBox.visible=false; ghost.visible=false;
+    if(!selMach) highlightMach(hm);
+    return;
+  } else if(!selMach) highlightMach(null);
+  const hit=castAt(e.clientX,e.clientY);
+  hoverBox.visible=false; ghost.visible=false;
+  if(!hit) return;
+  if(mode==="build"){
+    const j=buildTarget(hit);
+    if(j>=0){ ghost.position.copy(pos1(j)); ghost.visible=true; }
+  } else {
+    hoverBox.position.copy(pos1(hit.object.userData.slot));
+    hoverBox.material.color.set(mode==="mine"?0xff7a66:0x7ef0dd);
+    hoverBox.visible=true;
+  }
+});
+
+/* ============================== loop ============================== */
+function resize(){
+  // measure the canvas element itself — window.innerWidth lies in some mobile webviews
+  const r=canvas.getBoundingClientRect();
+  const w=Math.max(1,Math.round(r.width))||innerWidth;
+  const h=Math.max(1,Math.round(r.height))||innerHeight;
+  renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+  renderer.setSize(w,h,false);
+  camera.aspect=w/h; camera.updateProjectionMatrix();
+  measure();
+  placeCamera();
+}
+addEventListener("resize",resize);
+addEventListener("orientationchange",()=>setTimeout(resize,250));
+if (window.visualViewport) visualViewport.addEventListener("resize",resize);
+new ResizeObserver(resize).observe(canvas);
+resize();
+// mobile webviews settle layout late — re-measure a few times after load
+[100,400,1000].forEach(t=>setTimeout(resize,t));
+
+let spin=0;
+let lastMine=0;
+function loop(now){
+  requestAnimationFrame(loop);
+  applyZoom();
+  if(!reduced && ptrs.size===0) yaw+=0.0006;   // lazy idle drift
+  if(minerMesh) for(const g of minerMesh.children)
+    if(g.userData.spin){ g.rotation.y+=0.012; g.rotation.x+=0.005; }
+  const bt=now/(2600/(1+.6*tech.belt));
+  for(const b of beltDots){
+    let t=(bt+b.phase)%1; if(b.dir<0) t=1-t;
+    beltPoint(b,t,b.m.position);
+  }
+  if(now-lastMine>1000){ lastMine=now; tickMachines(false); }
+  placeCamera();
+  renderer.render(scene,camera);
+}
+requestAnimationFrame(loop);
+
+for(const b of document.querySelectorAll(".jtabs button")){
+  b.onclick=()=>{
+    document.querySelectorAll(".jtabs button").forEach(x=>x.classList.remove("act"));
+    document.querySelectorAll(".jtab").forEach(x=>x.classList.remove("act"));
+    b.classList.add("act");
+    document.getElementById(b.dataset.t).classList.add("act");
+  };
+}
+
+/* view-distance slider: camera dolly only — never changes level */
+const vz=$("vzoom"), vtrack=$("vtrack"), vthumb=$("vthumb");
+function setViewT(t){
+  viewT=Math.max(0,Math.min(1,t));
+  vthumb.style.bottom=(viewT*100)+"%";
+  placeCamera();
+}
+function vFrom(e){
+  const r=vtrack.getBoundingClientRect();
+  return 1-(e.clientY-r.top)/r.height;
+}
+let vDrag=false;
+vz.addEventListener("pointerdown",e=>{
+  vDrag=true; vz.setPointerCapture(e.pointerId); setViewT(vFrom(e)); e.preventDefault();
+});
+vz.addEventListener("pointermove",e=>{ if(vDrag) setViewT(vFrom(e)); });
+vz.addEventListener("pointerup",()=>vDrag=false);
+vz.addEventListener("pointercancel",()=>vDrag=false);
+$("lockbtn").addEventListener("pointerdown",e=>e.stopPropagation());
+$("lockbtn").onclick=e=>{
+  e.stopPropagation();
+  frozen=!frozen;
+  $("lockbtn").textContent=frozen?"🔒":"🔓";
+  $("lockbtn").classList.toggle("on",frozen);
+  if(frozen) zTarget=1;                     // settle cleanly on the current level
+  toast(frozen ? "level frozen — pinch zooms the view only"
+               : "level travel unlocked");
+};
+$("jbtn").onclick=()=>{
+  renderJournal();
+  $("curaddr").textContent=addrStr();
+  $("journal").classList.add("open");
+};
+$("copyaddr").onclick=async()=>{
+  try{ await navigator.clipboard.writeText(addrStr()); toast("address copied: "+addrStr()); }
+  catch(e){ toast(addrStr()); }
+};
+function goAddr(){
+  const v=$("goaddr").value.trim();
+  const p=v.split(/[,.\s]+/).filter(x=>x.length).map(Number);
+  if(p.length===1 && p[0]===0){ teleport(0,0,0,0); return; }
+  if(p.length!==4 || p.some(x=>!Number.isInteger(x)||x<0)){ toast("format: depth,x,y,z"); return; }
+  teleport(p[0],p[1],p[2],p[3]);
+}
+$("goaddrbtn").onclick=goAddr;
+$("goaddr").addEventListener("keydown",e=>{ if(e.key==="Enter") goAddr(); });
+$("jclose").onclick=()=>$("journal").classList.remove("open");
+$("gtoggle").onchange=e=>{ ghostOn=e.target.checked; rebuild(); saveSoon(); };
+$("hardtoggle").onchange=e=>{
+  hardcore=e.target.checked;
+  if(hardcore && mode==="build") setMode("mine");
+  toast(hardcore ? "🔥 hard mode: the fractal will not regrow" : "building re-enabled");
+  updateHUD(); saveSoon();
+};
+$("buildminer").onclick=()=>armPlace("miner");
+$("buildlab").onclick=()=>armPlace("lab");
+$("buildasm").onclick=()=>armPlace("asm");
+$("buildlift").onclick=()=>armPlace("lift");
+$("buildmx").onclick=()=>armPlace("matrix");
+$("ascbtn").onclick=depositAsc;
+$("craftseal").onclick=unlockGate;
+$("journal").addEventListener("pointerdown",e=>{
+  if(e.target.id==="journal") $("journal").classList.remove("open");
+});
+
+setMode("mine");
+rebuild();      // show the default sponge instantly…
+loadSave();     // …then restore the saved expedition on top
+})();
+</script>
+</body>
+</html>
