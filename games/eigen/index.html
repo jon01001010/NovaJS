@@ -202,6 +202,18 @@
   .target-board.size-5 .target-cell { width: 22px; height: 22px; }
   .target-board.size-5 .target-circle { width: 16px; height: 16px; font-size: 9px; }
 
+  .placed-badge {
+    position: absolute;
+    top: 5px;
+    right: 6px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--ink);
+    opacity: 0.75;
+    pointer-events: none;
+  }
+  .board.size-4 .placed-badge, .board.size-5 .placed-badge { top: 2px; right: 4px; font-size: 9px; }
+
   .cell:active {
     transform: scale(0.97);
   }
@@ -503,7 +515,7 @@
     <button class="btn" id="resetBtn">reset</button>
   </div>
 
-  <div class="hint" id="hint">each placement darkens the cell and its orthogonal neighbors. stack to go deeper.</div>
+  <div class="hint" id="hint">each placement darkens the cell and its orthogonal neighbors. stack to go deeper. tap a cell with no piece selected to take one back.</div>
 
   <div class="win-banner" id="winBanner">
     <span id="winText">matched.</span>
@@ -600,6 +612,7 @@ const state = {
   target: [],
   handUsed: [],         // boolean array, length 4 — which pieces have been placed
   selectedHandIdx: null,
+  placed: [],           // per cell: stack of hand indices placed there (for click-undo)
   moves: 0,
   levelIdx: progress.current,
   maxDark: 6,
@@ -617,6 +630,7 @@ function init() {
   saveProgress();
   state.handUsed = new Array(cellCount).fill(false);
   state.selectedHandIdx = null;
+  state.placed = Array.from({length: cellCount}, () => []);
   state.moves = 0;
   state.won = false;
 
@@ -641,6 +655,9 @@ function buildBoard() {
     const circle = document.createElement('div');
     circle.className = 'circle';
     cell.appendChild(circle);
+    const badge = document.createElement('div');
+    badge.className = 'placed-badge';
+    cell.appendChild(badge);
     cell.addEventListener('click', () => onCellClick(i));
     board.appendChild(cell);
   }
@@ -697,6 +714,9 @@ function updateBoardVisuals() {
     circle.style.background = darknessToColor(v);
     circle.style.color = darknessToTextColor(v);
     circle.textContent = v;
+    const n = state.placed[i] ? state.placed[i].length : 0;
+    cell.querySelector('.placed-badge').textContent = n ? '×' + n : '';
+    cell.setAttribute('aria-label', 'darkness ' + v + (n ? ', ' + n + ' placed here' : ''));
   });
 }
 
@@ -722,18 +742,33 @@ function getOrthogonalNeighbors(idx, size) {
 
 function onCellClick(cellIdx) {
   if (state.won) return;
+  const neighbors = getOrthogonalNeighbors(cellIdx, state.size);
+
   if (state.selectedHandIdx === null) {
-    flashHint('select a piece first.');
+    // click-undo: no piece selected → take the last piece placed on this cell back
+    const stack = state.placed[cellIdx];
+    if (!stack.length) {
+      flashHint('select a piece first — or tap a cell you placed on to take it back.');
+      return;
+    }
+    const handIdx = stack.pop();
+    state.board[cellIdx] -= 1;
+    for (const n of neighbors) state.board[n] -= 1;
+    state.handUsed[handIdx] = false;
+    state.moves++;
+    updateBoardVisuals();
+    buildHand();
+    updateMoveCounter();
     return;
   }
 
   // each placement adds +1 darkness to placed cell and each orthogonal neighbor
   state.board[cellIdx] += 1;
-  const neighbors = getOrthogonalNeighbors(cellIdx, state.size);
   for (const n of neighbors) {
     state.board[n] += 1;
   }
 
+  state.placed[cellIdx].push(state.selectedHandIdx);
   state.handUsed[state.selectedHandIdx] = true;
   state.selectedHandIdx = null;
   state.moves++;
@@ -775,7 +810,7 @@ function hideBanner() {
 let hintTimer = null;
 function flashHint(msg) {
   const h = document.getElementById('hint');
-  const original = 'each placement darkens the cell and its orthogonal neighbors. stack to go deeper.';
+  const original = 'each placement darkens the cell and its orthogonal neighbors. stack to go deeper. tap a cell with no piece selected to take one back.';
   h.textContent = msg;
   h.style.color = '#f4d03f';
   if (hintTimer) clearTimeout(hintTimer);
