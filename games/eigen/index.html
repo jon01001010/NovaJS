@@ -191,6 +191,17 @@
     padding: 6px;
   }
 
+  .board.size-5 .cell {
+    width: 54px;
+    height: 54px;
+    padding: 5px;
+  }
+
+  .target-board.size-4 .target-cell { width: 26px; height: 26px; }
+  .target-board.size-4 .target-circle { width: 18px; height: 18px; font-size: 10px; }
+  .target-board.size-5 .target-cell { width: 22px; height: 22px; }
+  .target-board.size-5 .target-circle { width: 16px; height: 16px; font-size: 9px; }
+
   .cell:active {
     transform: scale(0.97);
   }
@@ -231,6 +242,12 @@
     width: 40px;
     height: 40px;
     font-size: 14px;
+  }
+
+  .board.size-5 .circle {
+    width: 34px;
+    height: 34px;
+    font-size: 13px;
   }
 
   .hand-section {
@@ -341,6 +358,80 @@
     line-height: 1.6;
   }
 
+  .picker {
+    position: fixed;
+    inset: 0;
+    background: rgba(10,10,12,0.82);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    z-index: 90;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.25s ease;
+  }
+  .picker.visible { opacity: 1; pointer-events: auto; }
+  .picker-card {
+    background: var(--bg-soft);
+    border: 1px solid var(--cell-edge);
+    border-radius: 10px;
+    padding: 20px;
+    width: 100%;
+    max-width: 380px;
+    max-height: 90vh;
+    overflow-y: auto;
+  }
+  .picker-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-style: italic;
+    font-size: 22px;
+    font-weight: 300;
+    margin-bottom: 6px;
+  }
+  .picker-head button {
+    background: none;
+    border: 0;
+    color: var(--ink-dim);
+    font-size: 18px;
+    cursor: pointer;
+    padding: 4px 8px;
+  }
+  .picker-group {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.3em;
+    color: var(--ink-faint);
+    text-transform: uppercase;
+    margin: 14px 0 8px;
+  }
+  .picker-row { display: flex; flex-wrap: wrap; gap: 8px; }
+  .lvl-btn {
+    width: 44px;
+    height: 44px;
+    border-radius: 6px;
+    border: 1px solid var(--cell-edge);
+    background: var(--cell);
+    color: var(--ink);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 14px;
+    cursor: pointer;
+    position: relative;
+  }
+  .lvl-btn.done { border-color: var(--win); color: var(--win); background: #2b3a31; }
+  .lvl-btn.current { outline: 2px solid var(--ink); outline-offset: 2px; }
+  .lvl-btn:disabled { opacity: 0.25; cursor: default; }
+  .picker-note {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: var(--ink-faint);
+    letter-spacing: 0.1em;
+    margin-top: 16px;
+    line-height: 1.6;
+  }
+
   .win-banner {
     position: fixed;
     top: 50%;
@@ -408,20 +499,29 @@
   </div>
 
   <div class="controls">
+    <button class="btn" id="levelsBtn">levels</button>
     <button class="btn" id="resetBtn">reset</button>
   </div>
 
   <div class="hint" id="hint">each placement darkens the cell and its orthogonal neighbors. stack to go deeper.</div>
 
   <div class="win-banner" id="winBanner">
-    matched.
-    <span class="small">tap to continue</span>
+    <span id="winText">matched.</span>
+    <span class="small" id="winSmall">tap to continue</span>
+  </div>
+
+  <div class="picker" id="picker">
+    <div class="picker-card">
+      <div class="picker-head"><span>levels</span><button id="pickerClose" aria-label="close">✕</button></div>
+      <div id="pickerBody"></div>
+      <div class="picker-note">solve a level to unlock the next. progress is saved in this browser.</div>
+    </div>
   </div>
 
 <script>
 // darkness ranges 0 (white) to 6 (black). values can stack.
 function darknessToColor(d) {
-  const t = Math.max(0, Math.min(1, d / 6));  // clamp 0-1
+  const t = Math.max(0, Math.min(1, d / state.maxDark));  // clamp 0-1
   const v = Math.round(255 * (1 - t));
   return 'rgb(' + v + ',' + v + ',' + v + ')';
 }
@@ -429,57 +529,70 @@ function darknessToColor(d) {
 // pick readable text color based on background darkness
 function darknessToTextColor(d) {
   // light backgrounds (low d) → dark text; dark backgrounds (high d) → light text
-  return d >= 3.5 ? 'rgba(255,255,255,0.85)' : 'rgba(0,0,0,0.55)';
+  return d / state.maxDark >= 0.58 ? 'rgba(255,255,255,0.85)' : 'rgba(0,0,0,0.55)';
 }
 
-// each level: target darkness pattern. pieces always = cells (size*size).
-// each piece adds 1 to placed cell + orthogonal neighbors.
-//
-// solvability for 2x2: a cell's darkness equals (sum of 3 placements on the other cells).
-// since each cell has 2 neighbors + itself = 3 contributing positions, and total placements = 4,
-// a cell's darkness = 4 - (placements on the diagonally opposite cell).
-// so each cell's darkness must be in [0..4], and the four (4-target) values must sum to 4.
-//
-// for 3x3 with 9 placements: each cell affected by placements on itself + orthogonal neighbors.
-// corners have 2 neighbors, edges have 3, center has 4.
-// "place once on each cell" produces: corners=3, edges=4, center=5. Total = 33.
-const LEVELS = [
-  {
-    name: 'level 1',
-    size: 2,
-    // uniform: place once on each cell. easiest.
-    target: [3, 3, 3, 3],
-  },
-  {
-    name: 'level 2',
-    size: 2,
-    // mild diagonal gradient: bottom-right is darker
-    // solution: a=0, b=1, c=1, d=2
-    target: [2, 3, 3, 4],
-  },
-  {
-    name: 'level 3',
-    size: 2,
-    // vertical stripes: left column lighter, right column darker
-    // solution: a=0, b=2, c=0, d=2
-    target: [2, 4, 2, 4],
-  },
-  {
-    name: 'level 4',
-    size: 2,
-    // anti-diagonal: top-right and bottom-left darkest
-    // solution: a=1, b=0, c=0, d=3
-    target: [1, 4, 4, 3],
-  },
-  {
-    name: 'level 5',
-    size: 3,
-    // 3x3 uniform: place once on each cell. teaches the new asymmetry naturally.
-    // corners get 3 (self + 2 edge neighbors). edges get 4 (self + 2 corners + center).
-    // center gets 5 (self + 4 edges). player discovers center has more reach.
-    target: [3, 4, 3, 4, 5, 4, 3, 4, 3],
-  },
+// each level is defined by a SOLUTION: how many pieces go on each cell (sum = size*size,
+// so the whole hand gets used). the target is computed from it, so every level is
+// guaranteed solvable. each piece adds 1 to its cell and each orthogonal neighbor.
+// (4x4 and 5x5 can have more than one solution — any arrangement that matches wins.)
+const LEVEL_DEFS = [
+  // ---- 2×2 ----
+  { size: 2, sol: [1,1, 1,1] },                      // uniform
+  { size: 2, sol: [0,1, 1,2] },                      // diagonal gradient
+  { size: 2, sol: [0,2, 0,2] },                      // stripes
+  { size: 2, sol: [1,0, 0,3] },                      // anti-diagonal
+  // ---- 3×3 ----
+  { size: 3, sol: [1,1,1, 1,1,1, 1,1,1] },           // uniform: center reaches furthest
+  { size: 3, sol: [2,0,2, 0,1,0, 2,0,2] },           // corners
+  { size: 3, sol: [0,2,0, 2,1,2, 0,2,0] },           // cross
+  { size: 3, sol: [3,0,0, 0,3,0, 0,0,3] },           // diagonal
+  { size: 3, sol: [0,1,3, 0,0,2, 1,0,2] },           // scattered
+  // ---- 4×4 ----
+  { size: 4, sol: [1,1,1,1, 1,1,1,1, 1,1,1,1, 1,1,1,1] },
+  { size: 4, sol: [4,0,0,4, 0,0,0,0, 0,0,0,0, 4,0,0,4] },   // corners
+  { size: 4, sol: [0,0,0,0, 0,4,4,0, 0,4,4,0, 0,0,0,0] },   // heart
+  { size: 4, sol: [2,0,2,0, 0,2,0,2, 2,0,2,0, 0,2,0,2] },   // checkerboard
+  { size: 4, sol: [1,0,2,0, 0,3,0,1, 2,0,0,2, 0,1,4,0] },   // scattered
+  // ---- 5×5 ----
+  { size: 5, sol: [1,1,1,1,1, 1,1,1,1,1, 1,1,1,1,1, 1,1,1,1,1, 1,1,1,1,1] },
+  { size: 5, sol: [0,2,0,2,0, 2,0,2,0,2, 0,2,1,2,0, 2,0,2,0,2, 0,2,0,2,0] }, // checker
+  { size: 5, sol: [3,0,0,0,3, 0,3,0,3,0, 0,0,1,0,0, 0,3,0,3,0, 3,0,0,0,3] }, // X
+  { size: 5, sol: [0,0,3,0,0, 0,0,3,0,0, 3,3,1,3,3, 0,0,3,0,0, 0,0,3,0,0] }, // plus
+  { size: 5, sol: [2,0,0,0,2, 0,2,2,2,0, 0,2,1,2,0, 0,2,2,2,0, 2,0,0,0,2] }, // rings
+  { size: 5, sol: [2,0,1,0,0, 0,0,3,0,1, 1,2,0,0,2, 0,0,1,3,0, 3,0,0,2,4] }, // scattered
 ];
+
+function targetFromSolution(size, sol) {
+  const t = new Array(size * size).fill(0);
+  sol.forEach((n, i) => {
+    if (!n) return;
+    t[i] += n;
+    for (const j of getOrthogonalNeighbors(i, size)) t[j] += n;
+  });
+  return t;
+}
+
+const LEVELS = LEVEL_DEFS.map((def, i) => {
+  if (def.sol.length !== def.size * def.size ||
+      def.sol.reduce((a, b) => a + b, 0) !== def.size * def.size) {
+    console.warn('level ' + (i + 1) + ' solution must use exactly ' + def.size * def.size + ' pieces');
+  }
+  return { name: 'level ' + (i + 1), size: def.size, target: targetFromSolution(def.size, def.sol) };
+});
+
+// ---- progress: highest level unlocked + which are solved, saved per browser ----
+const SAVE_KEY = 'eigen-progress';
+let progress = { unlocked: 0, done: [], current: 0 };
+try {
+  const raw = localStorage.getItem(SAVE_KEY);
+  if (raw) progress = Object.assign(progress, JSON.parse(raw));
+} catch (e) { /* storage blocked — play without saving */ }
+progress.unlocked = Math.min(Math.max(0, progress.unlocked | 0), LEVELS.length - 1);
+progress.current = Math.min(Math.max(0, progress.current | 0), progress.unlocked);
+function saveProgress() {
+  try { localStorage.setItem(SAVE_KEY, JSON.stringify(progress)); } catch (e) {}
+}
 
 const state = {
   size: 2,
@@ -488,7 +601,8 @@ const state = {
   handUsed: [],         // boolean array, length 4 — which pieces have been placed
   selectedHandIdx: null,
   moves: 0,
-  levelIdx: 0,
+  levelIdx: progress.current,
+  maxDark: 6,
   won: false,
 };
 
@@ -498,6 +612,9 @@ function init() {
   const cellCount = lvl.size * lvl.size;
   state.board = new Array(cellCount).fill(0);
   state.target = lvl.target.slice();
+  state.maxDark = Math.max(6, ...state.target);
+  progress.current = state.levelIdx;
+  saveProgress();
   state.handUsed = new Array(cellCount).fill(false);
   state.selectedHandIdx = null;
   state.moves = 0;
@@ -533,6 +650,7 @@ function buildBoard() {
 function buildTarget() {
   const target = document.getElementById('targetBoard');
   target.innerHTML = '';
+  target.className = 'target-board size-' + state.size;
   target.style.gridTemplateColumns = 'repeat(' + state.size + ', 1fr)';
   let sum = 0;
   for (let i = 0; i < state.target.length; i++) {
@@ -634,6 +752,12 @@ function checkWin() {
     if (state.board[i] !== state.target[i]) return false;
   }
   state.won = true;
+  if (!progress.done.includes(state.levelIdx)) progress.done.push(state.levelIdx);
+  progress.unlocked = Math.min(LEVELS.length - 1, Math.max(progress.unlocked, state.levelIdx + 1));
+  saveProgress();
+  const last = state.levelIdx === LEVELS.length - 1;
+  document.getElementById('winText').textContent = last ? 'all levels matched.' : 'matched.';
+  document.getElementById('winSmall').textContent = last ? 'tap to pick a level' : 'tap for level ' + (state.levelIdx + 2);
   document.querySelectorAll('.cell').forEach(c => c.classList.add('match-pulse'));
   setTimeout(() => {
     showBanner();
@@ -666,8 +790,49 @@ document.getElementById('resetBtn').addEventListener('click', () => {
 });
 
 document.getElementById('winBanner').addEventListener('click', () => {
-  state.levelIdx = (state.levelIdx + 1) % LEVELS.length;
+  if (state.levelIdx === LEVELS.length - 1) { hideBanner(); openPicker(); return; }
+  state.levelIdx++;
   init();
+});
+
+function openPicker() {
+  const body = document.getElementById('pickerBody');
+  body.innerHTML = '';
+  let row = null, lastSize = 0;
+  LEVELS.forEach((lvl, i) => {
+    if (lvl.size !== lastSize) {
+      lastSize = lvl.size;
+      const g = document.createElement('div');
+      g.className = 'picker-group';
+      g.textContent = lvl.size + ' × ' + lvl.size;
+      body.appendChild(g);
+      row = document.createElement('div');
+      row.className = 'picker-row';
+      body.appendChild(row);
+    }
+    const b = document.createElement('button');
+    b.className = 'lvl-btn';
+    if (progress.done.includes(i)) b.classList.add('done');
+    if (i === state.levelIdx) b.classList.add('current');
+    b.textContent = i + 1;
+    b.disabled = i > progress.unlocked;
+    b.setAttribute('aria-label', lvl.name + (b.disabled ? ' (locked)' : progress.done.includes(i) ? ' (solved)' : ''));
+    b.addEventListener('click', () => {
+      closePicker();
+      state.levelIdx = i;
+      init();
+    });
+    row.appendChild(b);
+  });
+  document.getElementById('picker').classList.add('visible');
+}
+function closePicker() {
+  document.getElementById('picker').classList.remove('visible');
+}
+document.getElementById('levelsBtn').addEventListener('click', openPicker);
+document.getElementById('pickerClose').addEventListener('click', closePicker);
+document.getElementById('picker').addEventListener('click', e => {
+  if (e.target.id === 'picker') closePicker();
 });
 
 init();
