@@ -402,7 +402,7 @@
   <div class="play-area">
     <div class="board" id="board"></div>
     <div class="hand-section">
-      <div class="hand-label">hand · 4 pieces</div>
+      <div class="hand-label" id="handLabel">hand · 4 pieces</div>
       <div class="hand" id="hand"></div>
     </div>
   </div>
@@ -503,6 +503,7 @@ function init() {
   state.moves = 0;
   state.won = false;
 
+  document.getElementById('handLabel').textContent = 'hand · ' + cellCount + ' pieces';
   buildBoard();
   buildHand();
   buildTarget();
@@ -626,7 +627,7 @@ function onCellClick(cellIdx) {
 }
 
 function checkWin() {
-  // all 4 pieces must be placed
+  // every piece in the hand must be placed
   if (state.handUsed.some(u => !u)) return false;
   // and board must match target exactly (integer darkness, so equality is fine)
   for (let i = 0; i < state.board.length; i++) {
